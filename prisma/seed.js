@@ -12,7 +12,7 @@ async function main() {
   await prisma.task.create({
     data: {
       title: "アジェンダを作成する",
-      done: true,
+      status: "done",
       order: 0,
       parentId: planning.id,
     },

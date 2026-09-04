@@ -1,7 +1,19 @@
 "use client";
 
 import * as React from "react";
-import { ArrowUpDown, FoldVertical, Plus, UnfoldVertical } from "lucide-react";
+import {
+  ArrowUpDown,
+  CalendarClock,
+  Flag,
+  FoldVertical,
+  ListChecks,
+  ListPlus,
+  Plus,
+  Search,
+  Trash2,
+  UnfoldVertical,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -11,29 +23,53 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { BulkAddDialog } from "@/components/todo/bulk-add-dialog";
+import { formatDateRangeLabel } from "@/components/todo/date-range-fields";
+import { ExportImportMenu } from "@/components/todo/export-import-menu";
+import {
+  DEFAULT_FILTERS,
+  filterTaskTree,
+  isFiltersActive,
+  type DueFilter,
+  type PriorityFilter,
+  type StatusFilter,
+  type TaskFilters,
+} from "@/components/todo/filters";
 import { PRIORITY_META } from "@/components/todo/priority";
 import { TaskDetailPanel } from "@/components/todo/task-detail-panel";
 import { TaskFormDialog } from "@/components/todo/task-form-dialog";
 import { TaskListItem } from "@/components/todo/task-list-item";
+import { TrashDialog } from "@/components/todo/trash-dialog";
 import {
   collectExpandableIds,
   countTasks,
   findPath,
   findTask,
   sortTasksForDisplay,
+  type BulkTaskInput,
+  type DeletedTaskSummary,
+  type ImportTaskInput,
   type Priority,
   type SortMode,
+  type TaskStatus,
   type TodoTask,
 } from "@/components/todo/types";
 import {
   createTaskAction,
+  createTasksBulkAction,
   deleteTaskAction,
   duplicateTaskAction,
+  getDeletedTasksAction,
+  importTasksAction,
+  permanentlyDeleteTaskAction,
+  permanentlyDeleteTasksAction,
+  restoreTaskAction,
   updateTaskAction,
 } from "@/lib/actions/tasks";
 import { cn } from "@/lib/utils";
@@ -42,6 +78,34 @@ const SORT_LABEL: Record<SortMode, string> = {
   created: "追加順",
   priority: "優先度順",
 };
+
+const STATUS_FILTER_LABEL: Record<StatusFilter, string> = {
+  all: "すべて",
+  not_started: "未着手",
+  in_progress: "進行中",
+  done: "完了",
+};
+
+const DUE_PRESET_LABEL: Record<Exclude<DueFilter, "range">, string> = {
+  all: "すべて",
+  overdue: "期限切れ",
+  has: "期限あり",
+  none: "期限なし",
+};
+
+function priorityFilterLabel(value: PriorityFilter): string {
+  if (value === "all") return "すべて";
+  if (value === "none") return "未設定";
+  return PRIORITY_META[value].label;
+}
+
+function dueFilterButtonLabel(filters: TaskFilters): string {
+  if (filters.due === "range") {
+    const range = formatDateRangeLabel(filters.dueFrom, filters.dueTo);
+    return range ?? "期間指定";
+  }
+  return DUE_PRESET_LABEL[filters.due];
+}
 
 function formatToday() {
   return new Intl.DateTimeFormat("ja-JP", {
@@ -63,13 +127,22 @@ export function TodoView({ initialTasks }: { initialTasks: TodoTask[] }) {
     open: boolean;
     parentId: string | null;
   }>({ open: false, parentId: null });
+  const [bulkAddOpen, setBulkAddOpen] = React.useState(false);
+  const [trashOpen, setTrashOpen] = React.useState(false);
+  const [trashLoading, setTrashLoading] = React.useState(false);
+  const [deletedTasks, setDeletedTasks] = React.useState<DeletedTaskSummary[]>(
+    []
+  );
+  const [filters, setFilters] = React.useState<TaskFilters>(DEFAULT_FILTERS);
+  const [dueFilterOpen, setDueFilterOpen] = React.useState(false);
 
   const { total, done } = countTasks(tasks);
   const progress = total > 0 ? Math.round((done / total) * 100) : 0;
-  const displayTasks = React.useMemo(
-    () => sortTasksForDisplay(tasks, sortMode),
-    [tasks, sortMode]
-  );
+  const filtersActive = isFiltersActive(filters);
+  const displayTasks = React.useMemo(() => {
+    const sorted = sortTasksForDisplay(tasks, sortMode);
+    return filterTaskTree(sorted, filters);
+  }, [tasks, sortMode, filters]);
   const selectedPath = selectedId ? findPath(tasks, selectedId) : null;
 
   function handleSelectFromList(id: string) {
@@ -109,19 +182,16 @@ export function TodoView({ initialTasks }: { initialTasks: TodoTask[] }) {
     });
   }
 
-  async function handleToggle(id: string) {
-    const target = findTask(tasks, id);
-    if (!target) return;
+  async function handleRestore(id: string, options?: { silent?: boolean }) {
     try {
-      const fresh = await updateTaskAction(id, { done: !target.done });
-      setTasks(fresh);
-      toast.success(
-        target.done
-          ? `「${target.title}」を未完了に戻しました`
-          : `「${target.title}」を完了にしました`
-      );
+      const { tree, deletedTasks: fresh } = await restoreTaskAction(id);
+      setTasks(tree);
+      setDeletedTasks(fresh);
+      if (!options?.silent) {
+        toast.success("タスクをタスク一覧に戻しました");
+      }
     } catch {
-      toast.error("更新に失敗しました");
+      toast.error("復元に失敗しました");
     }
   }
 
@@ -137,9 +207,36 @@ export function TodoView({ initialTasks }: { initialTasks: TodoTask[] }) {
           path && path.length > 1 ? path[path.length - 2].id : null;
         setSelectedId(parentId);
       }
-      toast.success(`「${target.title}」を削除しました`);
+      toast.success(`「${target.title}」を削除しました`, {
+        action: {
+          label: "元に戻す",
+          onClick: () => handleRestore(id, { silent: true }),
+        },
+      });
     } catch {
       toast.error("削除に失敗しました");
+    }
+  }
+
+  async function handlePermanentDelete(id: string) {
+    try {
+      const { tree, deletedTasks: fresh } =
+        await permanentlyDeleteTaskAction(id);
+      setTasks(tree);
+      setDeletedTasks(fresh);
+      toast.success("タスクを完全に削除しました");
+    } catch {
+      toast.error("完全な削除に失敗しました");
+    }
+  }
+
+  async function undoCreate(id: string) {
+    try {
+      const { tree } = await permanentlyDeleteTaskAction(id);
+      setTasks(tree);
+      if (selectedId === id) setSelectedId(null);
+    } catch {
+      toast.error("元に戻せませんでした");
     }
   }
 
@@ -147,9 +244,11 @@ export function TodoView({ initialTasks }: { initialTasks: TodoTask[] }) {
     const target = findTask(tasks, id);
     if (!target) return;
     try {
-      const { tree } = await duplicateTaskAction(id);
+      const { id: newId, tree } = await duplicateTaskAction(id);
       setTasks(tree);
-      toast.success(`「${target.title}」を複製しました`);
+      toast.success(`「${target.title}」を複製しました`, {
+        action: { label: "元に戻す", onClick: () => undoCreate(newId) },
+      });
     } catch {
       toast.error("複製に失敗しました");
     }
@@ -173,7 +272,16 @@ export function TodoView({ initialTasks }: { initialTasks: TodoTask[] }) {
 
   async function handleSaveTaskDetail(
     id: string,
-    data: { title: string; priority: Priority | null; memo: string }
+    data: {
+      title: string;
+      priority: Priority | null;
+      memo: string;
+      startDate: string | null;
+      endDate: string | null;
+      status: TaskStatus;
+      progress: number;
+      tags: string[];
+    }
   ) {
     try {
       const fresh = await updateTaskAction(id, data);
@@ -187,15 +295,24 @@ export function TodoView({ initialTasks }: { initialTasks: TodoTask[] }) {
   async function handleCreateTask({
     title,
     priority,
+    startDate,
+    endDate,
+    tags,
   }: {
     title: string;
     priority: Priority | null;
+    startDate: string | null;
+    endDate: string | null;
+    tags: string[];
   }) {
     const parentId = addDialog.parentId;
     try {
       const { id, tree } = await createTaskAction({
         title,
         priority,
+        startDate,
+        endDate,
+        tags,
         parentId,
       });
       setTasks(tree);
@@ -203,9 +320,60 @@ export function TodoView({ initialTasks }: { initialTasks: TodoTask[] }) {
       if (parentId) {
         setExpandedIds((prev) => new Set(prev).add(parentId));
       }
-      toast.success(`「${title}」を追加しました`);
+      toast.success(`「${title}」を追加しました`, {
+        action: { label: "元に戻す", onClick: () => undoCreate(id) },
+      });
     } catch {
       toast.error("追加に失敗しました");
+    }
+  }
+
+  async function handleBulkAdd(nodes: BulkTaskInput[]) {
+    try {
+      const { count, rootIds, tree } = await createTasksBulkAction(
+        nodes,
+        null
+      );
+      setTasks(tree);
+      toast.success(`${count} 件のタスクを追加しました`, {
+        action: {
+          label: "元に戻す",
+          onClick: async () => {
+            try {
+              const { tree: reverted } =
+                await permanentlyDeleteTasksAction(rootIds);
+              setTasks(reverted);
+            } catch {
+              toast.error("元に戻せませんでした");
+            }
+          },
+        },
+      });
+    } catch {
+      toast.error("一括追加に失敗しました");
+    }
+  }
+
+  async function handleImport(nodes: ImportTaskInput[]) {
+    try {
+      const { count, tree } = await importTasksAction(nodes);
+      setTasks(tree);
+      toast.success(`${count} 件のタスクをインポートしました`);
+    } catch {
+      toast.error("インポートに失敗しました");
+    }
+  }
+
+  async function handleOpenTrash() {
+    setTrashOpen(true);
+    setTrashLoading(true);
+    try {
+      const fresh = await getDeletedTasksAction();
+      setDeletedTasks(fresh);
+    } catch {
+      toast.error("削除済みタスクの取得に失敗しました");
+    } finally {
+      setTrashLoading(false);
     }
   }
 
@@ -229,12 +397,26 @@ export function TodoView({ initialTasks }: { initialTasks: TodoTask[] }) {
         </div>
       </div>
 
+      <div className="flex items-center justify-end gap-1.5">
+        <ExportImportMenu tasks={tasks} onImport={handleImport} />
+
+        <Tooltip>
+          <TooltipTrigger
+            onClick={handleOpenTrash}
+            aria-label="削除済みタスク"
+            className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            削除済みタスク
+          </TooltipTrigger>
+          <TooltipContent>削除したタスクの確認・復元</TooltipContent>
+        </Tooltip>
+      </div>
+
       <div
         className={cn(
           "overflow-hidden rounded-xl border border-border bg-card ring-1 ring-foreground/5",
-          selectedPath
-            ? "grid grid-cols-1 lg:grid-cols-[22rem_1fr]"
-            : "mx-auto max-w-2xl"
+          selectedPath && "grid grid-cols-1 lg:grid-cols-[22rem_1fr]"
         )}
       >
         {/* Left: task list */}
@@ -257,6 +439,17 @@ export function TodoView({ initialTasks }: { initialTasks: TodoTask[] }) {
             </Tooltip>
 
             <div className="flex items-center gap-1">
+              <Tooltip>
+                <TooltipTrigger
+                  onClick={() => setBulkAddOpen(true)}
+                  aria-label="テキストで一括追加"
+                  className="flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  <ListPlus className="h-3.5 w-3.5" />
+                </TooltipTrigger>
+                <TooltipContent>テキストで一括追加</TooltipContent>
+              </Tooltip>
+
               <Tooltip>
                 <TooltipTrigger
                   onClick={handleExpandAll}
@@ -312,6 +505,195 @@ export function TodoView({ initialTasks }: { initialTasks: TodoTask[] }) {
             </div>
           </div>
 
+          <div className="space-y-2 border-b border-border px-4 py-3">
+            <div className="relative">
+              <Search className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={filters.search}
+                onChange={(e) =>
+                  setFilters((prev) => ({ ...prev, search: e.target.value }))
+                }
+                placeholder="タスク名・メモ・タグで検索"
+                className="h-8 pl-8 text-sm"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5">
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  className={cn(
+                    "flex h-7 items-center gap-1 rounded-full border px-2.5 text-xs transition-colors hover:bg-muted",
+                    filters.status !== "all"
+                      ? "border-primary/40 bg-primary/5 text-primary"
+                      : "border-border text-muted-foreground"
+                  )}
+                >
+                  <ListChecks className="h-3 w-3" />
+                  {STATUS_FILTER_LABEL[filters.status]}
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuRadioGroup
+                    value={filters.status}
+                    onValueChange={(value) =>
+                      setFilters((prev) => ({
+                        ...prev,
+                        status: value as StatusFilter,
+                      }))
+                    }
+                  >
+                    <DropdownMenuRadioItem value="all">
+                      すべて
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="not_started">
+                      未着手
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="in_progress">
+                      進行中
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="done">
+                      完了
+                    </DropdownMenuRadioItem>
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  className={cn(
+                    "flex h-7 items-center gap-1 rounded-full border px-2.5 text-xs transition-colors hover:bg-muted",
+                    filters.priority !== "all"
+                      ? "border-primary/40 bg-primary/5 text-primary"
+                      : "border-border text-muted-foreground"
+                  )}
+                >
+                  <Flag className="h-3 w-3" />
+                  {priorityFilterLabel(filters.priority)}
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuRadioGroup
+                    value={String(filters.priority)}
+                    onValueChange={(value) =>
+                      setFilters((prev) => ({
+                        ...prev,
+                        priority:
+                          value === "all" || value === "none"
+                            ? (value as PriorityFilter)
+                            : (Number(value) as Priority),
+                      }))
+                    }
+                  >
+                    <DropdownMenuRadioItem value="all">
+                      すべて
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="none">
+                      未設定
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="1">
+                      {PRIORITY_META[1].label}
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="2">
+                      {PRIORITY_META[2].label}
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="3">
+                      {PRIORITY_META[3].label}
+                    </DropdownMenuRadioItem>
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <button
+                type="button"
+                onClick={() => setDueFilterOpen((v) => !v)}
+                className={cn(
+                  "flex h-7 items-center gap-1 rounded-full border px-2.5 text-xs transition-colors hover:bg-muted",
+                  filters.due !== "all"
+                    ? "border-primary/40 bg-primary/5 text-primary"
+                    : "border-border text-muted-foreground"
+                )}
+              >
+                <CalendarClock className="h-3 w-3" />
+                {dueFilterButtonLabel(filters)}
+              </button>
+
+              {filtersActive && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilters(DEFAULT_FILTERS);
+                    setDueFilterOpen(false);
+                  }}
+                  className="flex h-7 items-center gap-1 rounded-full px-2 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-3 w-3" />
+                  クリア
+                </button>
+              )}
+            </div>
+
+            {dueFilterOpen && (
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/30 p-2">
+                <div className="flex flex-wrap gap-1">
+                  {(
+                    Object.keys(DUE_PRESET_LABEL) as Exclude<
+                      DueFilter,
+                      "range"
+                    >[]
+                  ).map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() =>
+                        setFilters((prev) => ({
+                          ...prev,
+                          due: option,
+                          dueFrom: null,
+                          dueTo: null,
+                        }))
+                      }
+                      className={cn(
+                        "rounded-full border px-2 py-0.5 text-[11px] transition-colors",
+                        filters.due === option
+                          ? "border-primary/40 bg-primary/10 text-primary"
+                          : "border-border text-muted-foreground hover:bg-muted"
+                      )}
+                    >
+                      {DUE_PRESET_LABEL[option]}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    type="date"
+                    value={filters.dueFrom ?? ""}
+                    onChange={(e) =>
+                      setFilters((prev) => ({
+                        ...prev,
+                        due: "range",
+                        dueFrom: e.target.value || null,
+                      }))
+                    }
+                    className="h-7 w-[8.5rem] text-xs"
+                    aria-label="期限の範囲開始日"
+                  />
+                  <span className="text-xs text-muted-foreground">〜</span>
+                  <Input
+                    type="date"
+                    value={filters.dueTo ?? ""}
+                    onChange={(e) =>
+                      setFilters((prev) => ({
+                        ...prev,
+                        due: "range",
+                        dueTo: e.target.value || null,
+                      }))
+                    }
+                    className="h-7 w-[8.5rem] text-xs"
+                    aria-label="期限の範囲終了日"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="max-h-[36rem] flex-1 space-y-2 overflow-y-auto p-2 lg:max-h-none">
             {displayTasks.length === 0 ? (
               <p className="rounded-lg border border-dashed border-border px-3 py-8 text-center text-sm text-muted-foreground">
@@ -325,11 +707,11 @@ export function TodoView({ initialTasks }: { initialTasks: TodoTask[] }) {
                   depth={0}
                   selectedId={selectedId}
                   expandedIds={expandedIds}
+                  showActions={!selectedPath}
                   onSelect={handleSelectFromList}
                   onToggleExpand={handleToggleExpand}
                   onExpandSubtree={handleExpandSubtree}
                   onCollapseSubtree={handleCollapseSubtree}
-                  onToggle={handleToggle}
                   onDelete={handleDelete}
                   onDuplicate={handleDuplicate}
                   onChangePriority={handleChangePriority}
@@ -349,7 +731,6 @@ export function TodoView({ initialTasks }: { initialTasks: TodoTask[] }) {
               key={selectedId}
               path={selectedPath}
               onSelect={setSelectedId}
-              onToggle={handleToggle}
               onDelete={handleDelete}
               onSave={handleSaveTaskDetail}
             />
@@ -363,6 +744,21 @@ export function TodoView({ initialTasks }: { initialTasks: TodoTask[] }) {
         heading={addDialog.parentId ? "サブタスクを追加" : "タスクを追加"}
         description="タスク名を入力してください。優先順位は設定しなくても追加できます。"
         onSubmit={handleCreateTask}
+      />
+
+      <BulkAddDialog
+        open={bulkAddOpen}
+        onOpenChange={setBulkAddOpen}
+        onSubmit={handleBulkAdd}
+      />
+
+      <TrashDialog
+        open={trashOpen}
+        onOpenChange={setTrashOpen}
+        items={deletedTasks}
+        loading={trashLoading}
+        onRestore={(id) => handleRestore(id)}
+        onPermanentlyDelete={handlePermanentDelete}
       />
     </div>
   );

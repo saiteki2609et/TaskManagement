@@ -2,13 +2,15 @@
 
 import * as React from "react";
 import {
+  Calendar,
   Check,
   ChevronDown,
   ChevronRight,
+  Circle,
+  CircleDot,
   Copy,
   Flag,
   FoldVertical,
-  ListTodo,
   Plus,
   Trash2,
   UnfoldVertical,
@@ -37,7 +39,9 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { formatDateRangeLabel } from "@/components/todo/date-range-fields";
 import { PRIORITY_META } from "@/components/todo/priority";
+import { STATUS_META } from "@/components/todo/status";
 import {
   countTasks,
   type Priority,
@@ -50,11 +54,11 @@ type TaskListItemProps = {
   depth: number;
   selectedId: string | null;
   expandedIds: Set<string>;
+  showActions: boolean;
   onSelect: (id: string) => void;
   onToggleExpand: (id: string) => void;
   onExpandSubtree: (task: TodoTask) => void;
   onCollapseSubtree: (task: TodoTask) => void;
-  onToggle: (id: string) => void;
   onDelete: (id: string) => void;
   onDuplicate: (id: string) => void;
   onChangePriority: (id: string, priority: Priority | null) => void;
@@ -66,11 +70,11 @@ export function TaskListItem({
   depth,
   selectedId,
   expandedIds,
+  showActions,
   onSelect,
   onToggleExpand,
   onExpandSubtree,
   onCollapseSubtree,
-  onToggle,
   onDelete,
   onDuplicate,
   onChangePriority,
@@ -81,6 +85,7 @@ export function TaskListItem({
   const isExpanded = expandedIds.has(task.id);
   const isSelected = task.id === selectedId;
   const priorityMeta = task.priority ? PRIORITY_META[task.priority] : null;
+  const dateRangeLabel = formatDateRangeLabel(task.startDate, task.endDate);
 
   const subtitle = hasChildren
     ? (() => {
@@ -106,7 +111,10 @@ export function TaskListItem({
       >
         <button
           type="button"
-          onClick={() => onToggleExpand(task.id)}
+          onClick={(e) => {
+            onToggleExpand(task.id);
+            e.currentTarget.blur();
+          }}
           className={cn(
             "flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground",
             !hasChildren && "invisible"
@@ -120,41 +128,39 @@ export function TaskListItem({
           )}
         </button>
 
-        <button
-          type="button"
-          onClick={() => onToggle(task.id)}
-          aria-label={
-            task.done
-              ? `${task.title} を未完了に戻す`
-              : `${task.title} を完了にする`
-          }
+        <div
+          role="img"
+          aria-label={`ステータス: ${STATUS_META[task.status].label}`}
           className={cn(
-            "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors",
-            task.done
+            "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
+            task.status === "done"
               ? "bg-primary text-primary-foreground"
               : priorityMeta
                 ? cn(priorityMeta.dot, "text-white")
                 : "bg-muted text-muted-foreground"
           )}
         >
-          {task.done ? (
+          {task.status === "done" ? (
             <Check className="h-4 w-4" />
-          ) : priorityMeta ? (
-            <Flag className="h-4 w-4" />
+          ) : task.status === "in_progress" ? (
+            <CircleDot className="h-4 w-4" />
           ) : (
-            <ListTodo className="h-4 w-4" />
+            <Circle className="h-4 w-4" />
           )}
-        </button>
+        </div>
 
         <button
           type="button"
-          onClick={() => onSelect(task.id)}
+          onClick={(e) => {
+            onSelect(task.id);
+            e.currentTarget.blur();
+          }}
           className="min-w-0 flex-1 text-left"
         >
           <p
             className={cn(
               "truncate text-sm font-semibold",
-              task.done && "text-muted-foreground line-through"
+              task.status === "done" && "text-muted-foreground line-through"
             )}
           >
             {task.title}
@@ -162,9 +168,34 @@ export function TaskListItem({
           <p className="truncate text-xs text-muted-foreground">
             {subtitle}
           </p>
+          {dateRangeLabel && (
+            <p className="flex items-center gap-1 truncate text-xs text-muted-foreground">
+              <Calendar className="h-3 w-3 shrink-0" />
+              {dateRangeLabel}
+            </p>
+          )}
+          {task.tags.length > 0 && (
+            <div className="mt-1 flex flex-wrap gap-1">
+              {task.tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
         </button>
 
-        <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 has-[[data-popup-open]]:opacity-100">
+        <div
+          className={cn(
+            "flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity",
+            showActions
+              ? "group-hover:opacity-100 group-focus-within:opacity-100 has-[[data-popup-open]]:opacity-100"
+              : "pointer-events-none"
+          )}
+        >
           {hasChildren && (
             <>
               <Tooltip>
@@ -300,11 +331,11 @@ export function TaskListItem({
               depth={depth + 1}
               selectedId={selectedId}
               expandedIds={expandedIds}
+              showActions={showActions}
               onSelect={onSelect}
               onToggleExpand={onToggleExpand}
               onExpandSubtree={onExpandSubtree}
               onCollapseSubtree={onCollapseSubtree}
-              onToggle={onToggle}
               onDelete={onDelete}
               onDuplicate={onDuplicate}
               onChangePriority={onChangePriority}

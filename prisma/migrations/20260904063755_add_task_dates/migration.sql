@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "Task" ADD COLUMN "endDate" DATETIME;
+ALTER TABLE "Task" ADD COLUMN "startDate" DATETIME;

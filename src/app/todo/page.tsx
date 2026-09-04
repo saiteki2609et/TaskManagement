@@ -14,11 +14,11 @@ export const metadata: Metadata = {
 };
 
 export default async function TodoPage() {
-  const rows = await prisma.task.findMany();
+  const rows = await prisma.task.findMany({ where: { deletedAt: null } });
   const initialTasks = buildTaskTree(rows);
 
   return (
-    <div className={cn(PAGE_CONTAINER, "py-14 lg:py-20")}>
+    <div className={cn(PAGE_CONTAINER, "py-10")}>
       <TodoView initialTasks={initialTasks} />
     </div>
   );
