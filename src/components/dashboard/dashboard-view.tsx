@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { GanttView } from "@/components/dashboard/gantt-view";
 import { ProjectSwitcher } from "@/components/dashboard/project-switcher";
 import type {
   Deliverable,
@@ -98,9 +99,11 @@ export function DashboardView({
           </TabsContent>
 
           <TabsContent value="gantt" className="pt-4">
-            <p className="rounded-lg border border-dashed border-border py-10 text-center text-sm text-muted-foreground">
-              スケジュール(ガント)ビューは準備中です
-            </p>
+            <GanttView
+              features={features}
+              phases={phases}
+              deliverables={deliverables}
+            />
           </TabsContent>
 
           <TabsContent value="qa" className="pt-4">
