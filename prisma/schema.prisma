@@ -28,3 +28,152 @@ model Task {
   @@index([parentId])
   @@index([deletedAt])
 }
+
+// --- 進捗ダッシュボード機能(docs/進捗ダッシュボード詳細設計書.md 1章) ---
+
+model Project {
+  id                  String    @id @default(cuid())
+  name                String    @unique
+  designDocFolderPath String    @default("")
+  isArchived          Boolean   @default(false)
+  deletedAt           DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  phases           Phase[]
+  features         Feature[]
+  deliverableTypes DeliverableType[]
+  deliverables     Deliverable[]
+  designDocuments  DesignDocument[]
+  qaHistories      QaHistory[]
+
+  @@index([deletedAt])
+  @@index([isArchived])
+}
+
+model Phase {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name      String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  deliverableTypes DeliverableType[]
+  deliverables     Deliverable[]
+
+  @@index([projectId])
+}
+
+model Feature {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name      String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  deliverables Deliverable[]
+
+  @@index([projectId])
+}
+
+// 全プロジェクト共通のひな形マスタ(projectIdを持たない)
+model GlobalDeliverableType {
+  id               String   @id @default(cuid())
+  name             String
+  defaultPhaseName String   @default("")
+  order            Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model DeliverableType {
+  id             String   @id @default(cuid())
+  projectId      String
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name           String
+  defaultPhaseId String?
+  defaultPhase   Phase?   @relation(fields: [defaultPhaseId], references: [id], onDelete: SetNull)
+  order          Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  deliverables Deliverable[]
+
+  @@index([projectId])
+}
+
+model Deliverable {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  featureId String
+  feature   Feature @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  phaseId   String
+  phase     Phase   @relation(fields: [phaseId], references: [id], onDelete: Cascade)
+  typeId    String?
+  type      DeliverableType? @relation(fields: [typeId], references: [id], onDelete: SetNull)
+
+  name             String
+  assignee         String    @default("")
+  status           String    @default("not_started") // not_started/in_progress/on_hold/in_review/done
+  plannedStartDate DateTime?
+  plannedEndDate   DateTime?
+  actualStartDate  DateTime?
+  actualEndDate    DateTime?
+  progress         Int       @default(0)
+  memo             String    @default("")
+  order            Int       @default(0)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([projectId])
+  @@index([featureId, phaseId])
+  @@index([typeId])
+}
+
+model DesignDocument {
+  id          String    @id @default(cuid())
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title       String
+  filePath    String
+  fileHash    String
+  indexStatus String    @default("pending") // pending/indexed/failed
+  indexedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  chunks DocumentChunk[]
+
+  @@unique([projectId, filePath])
+  @@index([projectId])
+}
+
+model DocumentChunk {
+  id           String         @id @default(cuid())
+  documentId   String
+  document     DesignDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  chunkIndex   Int
+  content      String
+  sectionLabel String
+  embedding    Bytes
+  createdAt    DateTime       @default(now())
+
+  @@index([documentId])
+}
+
+model QaHistory {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  question  String
+  answer    String
+  sources   String   // JSON文字列(参照元一覧)。既存Task.tagsのシリアライズ方式踏襲
+  createdAt DateTime @default(now())
+
+  @@index([projectId])
+}

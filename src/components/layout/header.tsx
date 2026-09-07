@@ -29,9 +29,9 @@ type NavItem = {
 };
 
 const mainNavItems: NavItem[] = [
-  { label: "ダッシュボード", href: "/dashboard", icon: LayoutDashboard },
+  { label: "ダッシュボード", href: "/dashboard", icon: LayoutDashboard, active: true },
   { label: "Todo", href: "/todo", icon: CheckSquare, active: true },
-  { label: "プロジェクト", href: "/projects", icon: FolderKanban },
+  { label: "プロジェクト", href: "/projects", icon: FolderKanban, active: true },
   { label: "カレンダー", href: "/calendar", icon: Calendar },
 ];
 
