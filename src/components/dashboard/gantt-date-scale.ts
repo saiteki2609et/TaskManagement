@@ -1,20 +1,24 @@
-import type { Deliverable } from "@/components/dashboard/types";
-
-export type GanttUnit = "week" | "month" | "quarter";
+export type GanttUnit = "week" | "month";
 
 const PX_PER_DAY: Record<GanttUnit, number> = {
-  week: 40,
-  month: 12,
-  quarter: 4,
+  week: 64,
+  month: 28,
 };
 
 export type GanttColumn = { label: string; offsetPx: number };
+export type GanttMonthLabel = { label: string; offsetPx: number };
 
 export type GanttScale = {
   rangeStart: Date;
+  rangeEnd: Date;
   pxPerDay: number;
   totalWidthPx: number;
+  /** 2段目(日)の目盛り */
   columns: GanttColumn[];
+  /** 1段目(月)の目盛り。月が変わる列にのみラベルを置く */
+  monthLabels: GanttMonthLabel[];
+  /** ページング操作の見出しに使う範囲ラベル(例: 「9/1 - 9/7」「2026年9月」) */
+  rangeLabel: string;
 };
 
 function startOfDay(date: Date): Date {
@@ -42,16 +46,8 @@ function startOfMonth(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), 1);
 }
 
-// 週表示は1日ごと、月表示は1週間ごと、四半期表示は1か月ごとに目盛りを刻む。
-function nextColumnStart(date: Date, unit: GanttUnit): Date {
-  if (unit === "week") return addDays(date, 1);
-  if (unit === "month") return addDays(date, 7);
-  return new Date(date.getFullYear(), date.getMonth() + 1, 1);
-}
-
-function formatColumnLabel(date: Date, unit: GanttUnit): string {
-  if (unit === "quarter") return `${date.getFullYear()}/${date.getMonth() + 1}`;
-  return `${date.getMonth() + 1}/${date.getDate()}`;
+function endOfMonth(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0);
 }
 
 export function dateToOffsetPx(
@@ -62,52 +58,59 @@ export function dateToOffsetPx(
   return diffDays(date, rangeStart) * pxPerDay;
 }
 
-export function buildDateScale(
+// ページング操作で表示中心をずらす。週表示は7日単位、月表示は暦月単位で移動する。
+export function shiftGanttAnchor(
+  anchor: Date,
   unit: GanttUnit,
-  rangeStart: Date,
-  rangeEnd: Date
-): GanttScale {
+  direction: 1 | -1
+): Date {
+  if (unit === "week") return addDays(anchor, direction * 7);
+  return new Date(anchor.getFullYear(), anchor.getMonth() + direction, 1);
+}
+
+function formatRangeLabel(unit: GanttUnit, start: Date, end: Date): string {
+  if (unit === "month") return `${start.getFullYear()}年${start.getMonth() + 1}月`;
+  const sameMonth = start.getMonth() === end.getMonth();
+  const startLabel = `${start.getMonth() + 1}/${start.getDate()}`;
+  const endLabel = sameMonth
+    ? `${end.getDate()}`
+    : `${end.getMonth() + 1}/${end.getDate()}`;
+  return `${startLabel} - ${endLabel}`;
+}
+
+// 週表示は指定日を含む直近1週間、月表示は指定日を含む暦月のみを表示する
+// (どちらもページング操作で表示範囲を切り替える。日単位で目盛りを刻む)。
+export function buildDateScale(unit: GanttUnit, anchor: Date): GanttScale {
   const pxPerDay = PX_PER_DAY[unit];
-  const start =
-    unit === "week"
-      ? startOfDay(rangeStart)
-      : unit === "month"
-        ? startOfWeek(rangeStart)
-        : startOfMonth(rangeStart);
-  const totalDays = Math.max(1, diffDays(rangeEnd, start));
+  const start = unit === "week" ? startOfWeek(anchor) : startOfMonth(anchor);
+  const end = unit === "week" ? addDays(start, 6) : endOfMonth(anchor);
+  const totalDays = diffDays(end, start) + 1;
   const totalWidthPx = totalDays * pxPerDay;
 
   const columns: GanttColumn[] = [];
+  const monthLabels: GanttMonthLabel[] = [];
   let cursor = start;
-  while (cursor.getTime() <= rangeEnd.getTime()) {
-    columns.push({
-      label: formatColumnLabel(cursor, unit),
-      offsetPx: dateToOffsetPx(cursor, start, pxPerDay),
-    });
-    cursor = nextColumnStart(cursor, unit);
+  let lastMonth = -1;
+  while (cursor.getTime() <= end.getTime()) {
+    const offsetPx = dateToOffsetPx(cursor, start, pxPerDay);
+    columns.push({ label: `${cursor.getDate()}`, offsetPx });
+    if (cursor.getMonth() !== lastMonth) {
+      monthLabels.push({
+        label: `${cursor.getFullYear()}/${cursor.getMonth() + 1}`,
+        offsetPx,
+      });
+      lastMonth = cursor.getMonth();
+    }
+    cursor = addDays(cursor, 1);
   }
 
-  return { rangeStart: start, pxPerDay, totalWidthPx, columns };
-}
-
-export function computeDateRange(deliverables: Deliverable[]): {
-  start: Date;
-  end: Date;
-} {
-  const dates: Date[] = [];
-  for (const d of deliverables) {
-    if (d.plannedStartDate) dates.push(new Date(d.plannedStartDate));
-    if (d.plannedEndDate) dates.push(new Date(d.plannedEndDate));
-    if (d.actualStartDate) dates.push(new Date(d.actualStartDate));
-    if (d.actualEndDate) dates.push(new Date(d.actualEndDate));
-  }
-
-  const today = new Date();
-  if (dates.length === 0) {
-    return { start: addDays(today, -7), end: addDays(today, 21) };
-  }
-
-  const min = new Date(Math.min(...dates.map((d) => d.getTime())));
-  const max = new Date(Math.max(...dates.map((d) => d.getTime()), today.getTime()));
-  return { start: addDays(min, -3), end: addDays(max, 3) };
+  return {
+    rangeStart: start,
+    rangeEnd: end,
+    pxPerDay,
+    totalWidthPx,
+    columns,
+    monthLabels,
+    rangeLabel: formatRangeLabel(unit, start, end),
+  };
 }

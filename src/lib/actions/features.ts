@@ -65,3 +65,16 @@ export async function deleteFeatureAction(id: string): Promise<Feature[]> {
   revalidatePath("/dashboard");
   return listFeaturesAction(target.projectId);
 }
+
+export async function reorderFeaturesAction(
+  projectId: string,
+  orderedIds: string[]
+): Promise<Feature[]> {
+  await prisma.$transaction(
+    orderedIds.map((id, index) =>
+      prisma.feature.update({ where: { id, projectId }, data: { order: index } })
+    )
+  );
+  revalidatePath("/dashboard");
+  return listFeaturesAction(projectId);
+}

@@ -4,7 +4,6 @@ import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { GanttView } from "@/components/dashboard/gantt-view";
 import { ProjectSwitcher } from "@/components/dashboard/project-switcher";
 import { QaView } from "@/components/dashboard/qa-view";
 import type {
@@ -23,6 +22,19 @@ const ProgressMatrixView = dynamic(
     import("@/components/dashboard/progress-matrix-view").then(
       (mod) => mod.ProgressMatrixView
     ),
+  {
+    ssr: false,
+    loading: () => (
+      <p className="rounded-lg border border-dashed border-border py-10 text-center text-sm text-muted-foreground">
+        読み込み中...
+      </p>
+    ),
+  }
+);
+
+const GanttView = dynamic(
+  () =>
+    import("@/components/dashboard/gantt-view").then((mod) => mod.GanttView),
   {
     ssr: false,
     loading: () => (
@@ -105,7 +117,8 @@ export function DashboardView({
           <TabsContent value="gantt" className="pt-4">
             <GanttView
               key={currentProjectId}
-              features={features}
+              projectId={currentProjectId}
+              initialFeatures={features}
               phases={phases}
               initialDeliverables={deliverables}
             />
