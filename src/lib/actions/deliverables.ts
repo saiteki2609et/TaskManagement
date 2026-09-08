@@ -40,7 +40,7 @@ export async function listDeliverablesAction(
 ): Promise<Deliverable[]> {
   const rows = await prisma.deliverable.findMany({
     where: { projectId },
-    orderBy: [{ featureId: "asc" }, { phaseId: "asc" }, { order: "asc" }],
+    orderBy: [{ featureId: "asc" }, { order: "asc" }],
   });
   return rows.map(toDeliverable);
 }
@@ -55,8 +55,11 @@ export async function createDeliverableFromDropAction(input: {
     prisma.feature.findUniqueOrThrow({ where: { id: input.featureId } }),
     prisma.deliverableType.findUniqueOrThrow({ where: { id: input.typeId } }),
   ]);
+  // orderは機能単位で管理する(ガントビューでの機能内ドラッグ&ドロップ並び替えの
+  // 対象範囲と一致させるため。工程ごとにスコープすると、工程をまたいだ並び替えが
+  // 正しく永続化できない)
   const order = await prisma.deliverable.count({
-    where: { featureId: input.featureId, phaseId: input.phaseId },
+    where: { featureId: input.featureId },
   });
   await prisma.deliverable.create({
     data: {
@@ -159,4 +162,18 @@ export async function deleteDeliverableAction(
   const target = await prisma.deliverable.delete({ where: { id } });
   revalidatePath("/dashboard");
   return listDeliverablesAction(target.projectId);
+}
+
+export async function reorderDeliverablesAction(
+  projectId: string,
+  featureId: string,
+  orderedIds: string[]
+): Promise<Deliverable[]> {
+  await prisma.$transaction(
+    orderedIds.map((id, index) =>
+      prisma.deliverable.update({ where: { id, featureId }, data: { order: index } })
+    )
+  );
+  revalidatePath("/dashboard");
+  return listDeliverablesAction(projectId);
 }

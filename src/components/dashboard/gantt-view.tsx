@@ -39,6 +39,7 @@ import {
 import type { Deliverable, Feature, Phase } from "@/components/dashboard/types";
 import {
   deleteDeliverableAction,
+  reorderDeliverablesAction,
   updateDeliverableAction,
 } from "@/lib/actions/deliverables";
 import { reorderFeaturesAction } from "@/lib/actions/features";
@@ -143,15 +144,24 @@ export function GanttView({
     setAnchor((prev) => shiftGanttAnchor(prev, unit, direction));
   }
 
-  async function handleFeatureDragEnd(event: DragEndEvent) {
+  function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
+    const featureId = (active.data.current as { featureId?: string } | undefined)
+      ?.featureId;
+    if (featureId) {
+      handleDeliverableDragEnd(featureId, String(active.id), String(over.id));
+    } else {
+      handleFeatureDragEnd(String(active.id), String(over.id));
+    }
+  }
 
+  async function handleFeatureDragEnd(activeId: string, overId: string) {
     // フィルタ等で一部の機能行が非表示の場合でも、表示中の行同士の並び替えとして
     // 解釈し、非表示の機能は元の相対位置を保ったまま全体の並び順にマージする。
     const visibleIds = groups.map((g) => g.feature.id);
-    const oldIndex = visibleIds.indexOf(String(active.id));
-    const newIndex = visibleIds.indexOf(String(over.id));
+    const oldIndex = visibleIds.indexOf(activeId);
+    const newIndex = visibleIds.indexOf(overId);
     if (oldIndex === -1 || newIndex === -1) return;
     const reorderedVisible = arrayMove(visibleIds, oldIndex, newIndex);
 
@@ -171,6 +181,50 @@ export function GanttView({
       setFeatures(fresh);
     } catch {
       setFeatures(previous);
+      toast.error("並び替えに失敗しました");
+    }
+  }
+
+  async function handleDeliverableDragEnd(
+    featureId: string,
+    activeId: string,
+    overId: string
+  ) {
+    // 機能内(同一階層)での並び替えのみを対象とする。フィルタ等で一部の成果物行が
+    // 非表示の場合は、表示中の行同士の並び替えとして解釈し、非表示分は元の相対位置を
+    // 保ったままその機能内の並び順にマージする(機能行の並び替えと同じ方針)。
+    const allInFeature = deliverables.filter((d) => d.featureId === featureId);
+    const visibleIds =
+      groups.find((g) => g.feature.id === featureId)?.deliverables.map(
+        (d) => d.id
+      ) ?? [];
+    const oldIndex = visibleIds.indexOf(activeId);
+    const newIndex = visibleIds.indexOf(overId);
+    if (oldIndex === -1 || newIndex === -1) return;
+    const reorderedVisible = arrayMove(visibleIds, oldIndex, newIndex);
+
+    const previous = deliverables;
+    let cursor = 0;
+    const orderedIds = allInFeature.map((d) =>
+      visibleIds.includes(d.id) ? reorderedVisible[cursor++] : d.id
+    );
+    const reorderedForFeature = orderedIds.map(
+      (id) => allInFeature.find((d) => d.id === id)!
+    );
+    setDeliverables([
+      ...deliverables.filter((d) => d.featureId !== featureId),
+      ...reorderedForFeature,
+    ]);
+
+    try {
+      const fresh = await reorderDeliverablesAction(
+        projectId,
+        featureId,
+        orderedIds
+      );
+      setDeliverables(fresh);
+    } catch {
+      setDeliverables(previous);
       toast.error("並び替えに失敗しました");
     }
   }
@@ -287,7 +341,7 @@ export function GanttView({
           {/* DndContextはtable内に直接置くと内部のアクセシビリティ用divが
               <table>の不正な子要素になりハイドレーションエラーになるため、
               tableの外側で囲む(SortableContextはDOMを生成しないため内側でよい)。 */}
-          <DndContext sensors={sensors} onDragEnd={handleFeatureDragEnd}>
+          <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
             <table className="w-full border-collapse text-sm">
               <thead>
                 <tr>
@@ -434,30 +488,74 @@ function GanttFeatureRow({
           </div>
         </td>
       </tr>
-      {expanded &&
-        deliverables.map((deliverable) => (
-          <tr
-            key={deliverable.id}
-            className="cursor-pointer hover:bg-muted/40"
-            onClick={() => onSelectDeliverable(deliverable)}
-          >
-            <td className="sticky left-0 z-10 border-b border-border bg-background p-2 pl-8 text-muted-foreground">
-              <span className="truncate">{deliverable.name}</span>
-            </td>
-            <td className="border-b border-border p-0">
-              <div
-                className="relative h-10 overflow-hidden"
-                style={{ width: scale.totalWidthPx }}
-              >
-                <GanttBar
-                  deliverable={deliverable}
-                  scale={scale}
-                  onClick={() => onSelectDeliverable(deliverable)}
-                />
-              </div>
-            </td>
-          </tr>
-        ))}
+      {expanded && (
+        <SortableContext
+          items={deliverables.map((d) => d.id)}
+          strategy={verticalListSortingStrategy}
+        >
+          {deliverables.map((deliverable) => (
+            <GanttDeliverableRow
+              key={deliverable.id}
+              featureId={feature.id}
+              deliverable={deliverable}
+              scale={scale}
+              onSelect={() => onSelectDeliverable(deliverable)}
+            />
+          ))}
+        </SortableContext>
+      )}
     </>
+  );
+}
+
+function GanttDeliverableRow({
+  featureId,
+  deliverable,
+  scale,
+  onSelect,
+}: {
+  featureId: string;
+  deliverable: Deliverable;
+  scale: GanttScale;
+  onSelect: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: deliverable.id, data: { featureId } });
+
+  return (
+    <tr
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1,
+      }}
+      className="cursor-pointer hover:bg-muted/40"
+      onClick={onSelect}
+    >
+      <td className="sticky left-0 z-10 border-b border-border bg-background p-2 pl-2 text-muted-foreground">
+        <div className="flex items-center gap-1.5 pl-6">
+          <button
+            type="button"
+            {...attributes}
+            {...listeners}
+            onClick={(e) => e.stopPropagation()}
+            aria-label="ドラッグして並び替え"
+            className="flex h-4 w-4 shrink-0 cursor-grab items-center justify-center text-muted-foreground/50 active:cursor-grabbing"
+          >
+            <GripVertical className="h-3.5 w-3.5" />
+          </button>
+          <span className="truncate">{deliverable.name}</span>
+        </div>
+      </td>
+      <td className="border-b border-border p-0">
+        <div
+          className="relative h-10 overflow-hidden"
+          style={{ width: scale.totalWidthPx }}
+        >
+          <GanttBar deliverable={deliverable} scale={scale} onClick={onSelect} />
+        </div>
+      </td>
+    </tr>
   );
 }
