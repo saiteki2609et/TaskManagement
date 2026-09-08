@@ -75,6 +75,7 @@ export async function rescanDesignDocumentsAction(
       updated: 0,
       skipped: 0,
       failed: 0,
+      removed: 0,
       failures: [{ filePath: "", reason: "設計書フォルダが設定されていません" }],
     };
   }

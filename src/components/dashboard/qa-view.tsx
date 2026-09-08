@@ -156,6 +156,19 @@ export function QaView({ projectId, designDocFolderPath }: QaViewProps) {
   const [previewLoading, setPreviewLoading] = React.useState(false);
   const [confirmClearOpen, setConfirmClearOpen] = React.useState(false);
   const [clearingHistory, setClearingHistory] = React.useState(false);
+  const [highlightedHistoryId, setHighlightedHistoryId] = React.useState<
+    string | null
+  >(null);
+  const messageRefs = React.useRef<Map<string, HTMLDivElement>>(new Map());
+
+  function handleHistoryItemClick(id: string) {
+    const el = messageRefs.current.get(id);
+    el?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setHighlightedHistoryId(id);
+    window.setTimeout(() => {
+      setHighlightedHistoryId((current) => (current === id ? null : current));
+    }, 1500);
+  }
 
   const documentTree = React.useMemo(
     () => buildDocumentTree(documents, designDocFolderPath),
@@ -217,7 +230,7 @@ export function QaView({ projectId, designDocFolderPath }: QaViewProps) {
 
     try {
       const result = await rescanDesignDocumentsAction(projectId);
-      const summary = `追加${result.added}件・更新${result.updated}件・失敗${result.failed}件`;
+      const summary = `追加${result.added}件・更新${result.updated}件・削除${result.removed}件・失敗${result.failed}件`;
       if (result.failed > 0) {
         toast.warning(`取り込みが完了しました(${summary})`);
       } else {
@@ -321,7 +334,15 @@ export function QaView({ projectId, designDocFolderPath }: QaViewProps) {
               </p>
             ) : (
               [...history].reverse().map((item) => (
-                <QaMessage key={item.id} item={item} />
+                <QaMessage
+                  key={item.id}
+                  item={item}
+                  highlighted={highlightedHistoryId === item.id}
+                  messageRef={(el) => {
+                    if (el) messageRefs.current.set(item.id, el);
+                    else messageRefs.current.delete(item.id);
+                  }}
+                />
               ))
             )}
             {asking && (
@@ -389,12 +410,15 @@ export function QaView({ projectId, designDocFolderPath }: QaViewProps) {
             ) : (
               <ul className="space-y-1">
                 {history.map((item) => (
-                  <li
-                    key={item.id}
-                    className="truncate rounded-md border border-border px-2 py-1.5 text-xs text-muted-foreground"
-                    title={item.question}
-                  >
-                    {item.question}
+                  <li key={item.id}>
+                    <button
+                      type="button"
+                      onClick={() => handleHistoryItemClick(item.id)}
+                      className="w-full truncate rounded-md border border-border px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+                      title={item.question}
+                    >
+                      {item.question}
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -580,9 +604,23 @@ function DesignDocumentPreviewDialog({
   );
 }
 
-function QaMessage({ item }: { item: QaHistoryItem }) {
+function QaMessage({
+  item,
+  highlighted,
+  messageRef,
+}: {
+  item: QaHistoryItem;
+  highlighted: boolean;
+  messageRef: (el: HTMLDivElement | null) => void;
+}) {
   return (
-    <div className="space-y-2">
+    <div
+      ref={messageRef}
+      className={cn(
+        "scroll-mt-2 space-y-2 rounded-lg transition-shadow duration-300",
+        highlighted && "ring-2 ring-primary/60"
+      )}
+    >
       <p className="rounded-lg bg-muted px-3 py-2 text-sm">{item.question}</p>
       <div className="space-y-2 rounded-lg border border-border px-3 py-2">
         <p className="text-sm whitespace-pre-wrap">{item.answer}</p>

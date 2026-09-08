@@ -14,6 +14,7 @@ export type RescanResult = {
   updated: number;
   skipped: number;
   failed: number;
+  removed: number;
   failures: { filePath: string; reason: string }[];
 };
 
@@ -61,6 +62,7 @@ export async function scanAndIndex(
     updated: 0,
     skipped: 0,
     failed: 0,
+    removed: 0,
     failures: [],
   };
 
@@ -75,6 +77,28 @@ export async function scanAndIndex(
   const targetFiles = allFiles.filter((f) =>
     SUPPORTED_EXTENSIONS.includes(path.extname(f).toLowerCase())
   );
+
+  // フォルダ移動・リネーム等で実ファイルが無くなった設計書のレコードを削除する。
+  // targetFilesとの単純な差分ではなく実際にfs.accessで存在確認するのは、
+  // サブディレクトリの読み取りに一時的に失敗した場合(dirFailures)に、
+  // 実在するファイルのレコードを誤って削除してしまわないようにするため。
+  const existingDocs = await prisma.designDocument.findMany({
+    where: { projectId },
+    select: { id: true, filePath: true },
+  });
+  const staleDocIds: string[] = [];
+  for (const doc of existingDocs) {
+    try {
+      await fs.access(doc.filePath);
+    } catch {
+      staleDocIds.push(doc.id);
+    }
+  }
+  if (staleDocIds.length > 0) {
+    await prisma.designDocument.deleteMany({ where: { id: { in: staleDocIds } } });
+    result.removed = staleDocIds.length;
+    publishDesignDocProgress(projectId);
+  }
 
   // ファイル単位で逐次処理する(メモリ使用量を抑えるため並列化しない)
   for (const filePath of targetFiles) {
