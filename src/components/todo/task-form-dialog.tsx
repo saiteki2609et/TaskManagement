@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   DateRangeFields,
   isDateRangeInvalid,
@@ -20,7 +21,7 @@ import {
 import { PriorityPicker } from "@/components/todo/priority-picker";
 import { TagsInput } from "@/components/todo/tags-input";
 import type { Priority } from "@/components/todo/types";
-import { TASK_TITLE_MAX_LENGTH } from "@/lib/constants";
+import { TASK_MEMO_MAX_LENGTH, TASK_TITLE_MAX_LENGTH } from "@/lib/constants";
 
 type TaskFormDialogProps = {
   open: boolean;
@@ -30,6 +31,7 @@ type TaskFormDialogProps = {
   onSubmit: (data: {
     title: string;
     priority: Priority | null;
+    memo: string;
     startDate: string | null;
     endDate: string | null;
     tags: string[];
@@ -45,6 +47,7 @@ export function TaskFormDialog({
 }: TaskFormDialogProps) {
   const [title, setTitle] = React.useState("");
   const [priority, setPriority] = React.useState<Priority | null>(null);
+  const [memo, setMemo] = React.useState("");
   const [startDate, setStartDate] = React.useState<string | null>(null);
   const [endDate, setEndDate] = React.useState<string | null>(null);
   const [tags, setTags] = React.useState<string[]>([]);
@@ -55,6 +58,7 @@ export function TaskFormDialog({
     if (open) {
       setTitle("");
       setPriority(null);
+      setMemo("");
       setStartDate(null);
       setEndDate(null);
       setTags([]);
@@ -67,7 +71,7 @@ export function TaskFormDialog({
     e.preventDefault();
     const value = title.trim();
     if (!value || invalidRange) return;
-    onSubmit({ title: value, priority, startDate, endDate, tags });
+    onSubmit({ title: value, priority, memo, startDate, endDate, tags });
     onOpenChange(false);
   }
 
@@ -121,6 +125,23 @@ export function TaskFormDialog({
                 tags={tags}
                 onChange={setTags}
                 placeholder="タグを入力してEnter"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="task-memo">メモ（任意）</Label>
+                <span className="text-xs text-muted-foreground">
+                  {memo.length} / {TASK_MEMO_MAX_LENGTH}
+                </span>
+              </div>
+              <Textarea
+                id="task-memo"
+                value={memo}
+                onChange={(e) => setMemo(e.target.value)}
+                maxLength={TASK_MEMO_MAX_LENGTH}
+                placeholder="メモを入力"
+                className="min-h-24"
               />
             </div>
           </div>

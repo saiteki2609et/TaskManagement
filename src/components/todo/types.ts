@@ -107,6 +107,19 @@ export function findPath(tasks: TodoTask[], id: string): TodoTask[] | null {
   return null;
 }
 
+export function replaceSiblingOrder(
+  tasks: TodoTask[],
+  parentId: string | null,
+  orderedSiblings: TodoTask[]
+): TodoTask[] {
+  if (parentId === null) return orderedSiblings;
+  return tasks.map((task) =>
+    task.id === parentId
+      ? { ...task, children: orderedSiblings }
+      : { ...task, children: replaceSiblingOrder(task.children, parentId, orderedSiblings) }
+  );
+}
+
 export function countTasks(tasks: TodoTask[]): { total: number; done: number } {
   return tasks.reduce(
     (acc, task) => {

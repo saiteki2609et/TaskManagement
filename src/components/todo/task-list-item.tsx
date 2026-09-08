@@ -2,6 +2,12 @@
 
 import * as React from "react";
 import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
   Calendar,
   Check,
   ChevronDown,
@@ -11,6 +17,7 @@ import {
   Copy,
   Flag,
   FoldVertical,
+  GripVertical,
   Plus,
   Trash2,
   UnfoldVertical,
@@ -51,10 +58,12 @@ import { cn } from "@/lib/utils";
 
 type TaskListItemProps = {
   task: TodoTask;
+  parentId: string | null;
   depth: number;
   selectedId: string | null;
   expandedIds: Set<string>;
   showActions: boolean;
+  dragEnabled: boolean;
   onSelect: (id: string) => void;
   onToggleExpand: (id: string) => void;
   onExpandSubtree: (task: TodoTask) => void;
@@ -67,10 +76,12 @@ type TaskListItemProps = {
 
 export function TaskListItem({
   task,
+  parentId,
   depth,
   selectedId,
   expandedIds,
   showActions,
+  dragEnabled,
   onSelect,
   onToggleExpand,
   onExpandSubtree,
@@ -87,6 +98,15 @@ export function TaskListItem({
   const priorityMeta = task.priority ? PRIORITY_META[task.priority] : null;
   const dateRangeLabel = formatDateRangeLabel(task.startDate, task.endDate);
 
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: task.id, data: { parentId }, disabled: !dragEnabled });
+
   const subtitle = hasChildren
     ? (() => {
         const { total, done } = countTasks(task.children);
@@ -99,7 +119,14 @@ export function TaskListItem({
         : "サブタスクなし";
 
   return (
-    <div>
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1,
+      }}
+    >
       <div
         className={cn(
           "group flex items-center gap-2 rounded-xl border px-2 py-2 transition-colors",
@@ -109,6 +136,18 @@ export function TaskListItem({
         )}
         style={{ marginLeft: depth * 18 }}
       >
+        {dragEnabled && (
+          <button
+            type="button"
+            {...attributes}
+            {...listeners}
+            aria-label="ドラッグして並び替え"
+            className="flex h-4 w-4 shrink-0 cursor-grab items-center justify-center text-muted-foreground/50 active:cursor-grabbing"
+          >
+            <GripVertical className="h-3.5 w-3.5" />
+          </button>
+        )}
+
         <button
           type="button"
           onClick={(e) => {
@@ -324,24 +363,31 @@ export function TaskListItem({
 
       {hasChildren && isExpanded && (
         <div className="mt-2 space-y-2">
-          {task.children.map((child) => (
-            <TaskListItem
-              key={child.id}
-              task={child}
-              depth={depth + 1}
-              selectedId={selectedId}
-              expandedIds={expandedIds}
-              showActions={showActions}
-              onSelect={onSelect}
-              onToggleExpand={onToggleExpand}
-              onExpandSubtree={onExpandSubtree}
-              onCollapseSubtree={onCollapseSubtree}
-              onDelete={onDelete}
-              onDuplicate={onDuplicate}
-              onChangePriority={onChangePriority}
-              onRequestAddChild={onRequestAddChild}
-            />
-          ))}
+          <SortableContext
+            items={task.children.map((child) => child.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            {task.children.map((child) => (
+              <TaskListItem
+                key={child.id}
+                task={child}
+                parentId={task.id}
+                depth={depth + 1}
+                selectedId={selectedId}
+                expandedIds={expandedIds}
+                showActions={showActions}
+                dragEnabled={dragEnabled}
+                onSelect={onSelect}
+                onToggleExpand={onToggleExpand}
+                onExpandSubtree={onExpandSubtree}
+                onCollapseSubtree={onCollapseSubtree}
+                onDelete={onDelete}
+                onDuplicate={onDuplicate}
+                onChangePriority={onChangePriority}
+                onRequestAddChild={onRequestAddChild}
+              />
+            ))}
+          </SortableContext>
         </div>
       )}
     </div>

@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+import dynamic from "next/dynamic";
+import type { DragEndEvent } from "@dnd-kit/core";
 import {
   ArrowUpDown,
   CalendarClock,
@@ -44,13 +46,13 @@ import {
 import { PRIORITY_META } from "@/components/todo/priority";
 import { TaskDetailPanel } from "@/components/todo/task-detail-panel";
 import { TaskFormDialog } from "@/components/todo/task-form-dialog";
-import { TaskListItem } from "@/components/todo/task-list-item";
 import { TrashDialog } from "@/components/todo/trash-dialog";
 import {
   collectExpandableIds,
   countTasks,
   findPath,
   findTask,
+  replaceSiblingOrder,
   sortTasksForDisplay,
   type BulkTaskInput,
   type DeletedTaskSummary,
@@ -69,10 +71,28 @@ import {
   importTasksAction,
   permanentlyDeleteTaskAction,
   permanentlyDeleteTasksAction,
+  reorderTasksAction,
   restoreTaskAction,
   updateTaskAction,
 } from "@/lib/actions/tasks";
 import { cn } from "@/lib/utils";
+
+// dnd-kitのaria-describedbyがサーバー/クライアントで不一致になりハイドレーション
+// エラーになるため、一覧全体をクライアント専用で描画する(sortable-task-list.tsx参照)。
+const SortableTaskList = dynamic(
+  () =>
+    import("@/components/todo/sortable-task-list").then(
+      (mod) => mod.SortableTaskList
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <p className="px-3 py-8 text-center text-sm text-muted-foreground">
+        読み込み中...
+      </p>
+    ),
+  }
+);
 
 const SORT_LABEL: Record<SortMode, string> = {
   created: "追加順",
@@ -144,6 +164,48 @@ export function TodoView({ initialTasks }: { initialTasks: TodoTask[] }) {
     return filterTaskTree(sorted, filters);
   }, [tasks, sortMode, filters]);
   const selectedPath = selectedId ? findPath(tasks, selectedId) : null;
+  // 並び替え(手動)モードかつフィルタ非適用時のみドラッグ&ドロップでの並び替えを許可する
+  // (優先度順表示やフィルタ適用中は表示順とorderフィールドが一致しないため)
+  const dragEnabled = sortMode === "created" && !filtersActive;
+
+  function getSiblings(parentId: string | null): TodoTask[] {
+    if (parentId === null) return tasks;
+    return findTask(tasks, parentId)?.children ?? [];
+  }
+
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const activeParentId = (active.data.current?.parentId ?? null) as
+      | string
+      | null;
+    const overParentId = (over.data.current?.parentId ?? null) as
+      | string
+      | null;
+    if (activeParentId !== overParentId) return;
+
+    const siblings = getSiblings(activeParentId);
+    const oldIndex = siblings.findIndex((t) => t.id === active.id);
+    const newIndex = siblings.findIndex((t) => t.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const reordered = [...siblings];
+    const [moved] = reordered.splice(oldIndex, 1);
+    reordered.splice(newIndex, 0, moved);
+
+    setTasks((prev) => replaceSiblingOrder(prev, activeParentId, reordered));
+    try {
+      const fresh = await reorderTasksAction(
+        activeParentId,
+        reordered.map((t) => t.id)
+      );
+      setTasks(fresh);
+    } catch {
+      toast.error("並び替えに失敗しました");
+      setTasks((prev) => replaceSiblingOrder(prev, activeParentId, siblings));
+    }
+  }
 
   function handleSelectFromList(id: string) {
     setSelectedId((prev) => (prev === id ? null : id));
@@ -295,12 +357,14 @@ export function TodoView({ initialTasks }: { initialTasks: TodoTask[] }) {
   async function handleCreateTask({
     title,
     priority,
+    memo,
     startDate,
     endDate,
     tags,
   }: {
     title: string;
     priority: Priority | null;
+    memo: string;
     startDate: string | null;
     endDate: string | null;
     tags: string[];
@@ -310,6 +374,7 @@ export function TodoView({ initialTasks }: { initialTasks: TodoTask[] }) {
       const { id, tree } = await createTaskAction({
         title,
         priority,
+        memo,
         startDate,
         endDate,
         tags,
@@ -700,26 +765,24 @@ export function TodoView({ initialTasks }: { initialTasks: TodoTask[] }) {
                 タスクがありません
               </p>
             ) : (
-              displayTasks.map((task) => (
-                <TaskListItem
-                  key={task.id}
-                  task={task}
-                  depth={0}
-                  selectedId={selectedId}
-                  expandedIds={expandedIds}
-                  showActions={!selectedPath}
-                  onSelect={handleSelectFromList}
-                  onToggleExpand={handleToggleExpand}
-                  onExpandSubtree={handleExpandSubtree}
-                  onCollapseSubtree={handleCollapseSubtree}
-                  onDelete={handleDelete}
-                  onDuplicate={handleDuplicate}
-                  onChangePriority={handleChangePriority}
-                  onRequestAddChild={(parentId) =>
-                    setAddDialog({ open: true, parentId })
-                  }
-                />
-              ))
+              <SortableTaskList
+                tasks={displayTasks}
+                selectedId={selectedId}
+                expandedIds={expandedIds}
+                showActions={!selectedPath}
+                dragEnabled={dragEnabled}
+                onDragEnd={handleDragEnd}
+                onSelect={handleSelectFromList}
+                onToggleExpand={handleToggleExpand}
+                onExpandSubtree={handleExpandSubtree}
+                onCollapseSubtree={handleCollapseSubtree}
+                onDelete={handleDelete}
+                onDuplicate={handleDuplicate}
+                onChangePriority={handleChangePriority}
+                onRequestAddChild={(parentId) =>
+                  setAddDialog({ open: true, parentId })
+                }
+              />
             )}
           </div>
         </div>

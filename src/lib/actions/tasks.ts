@@ -57,7 +57,7 @@ function toPrismaData<T extends Partial<TaskWritableFields>>(data: T) {
 
 export async function createTaskAction(
   input: Pick<TaskWritableFields, "title" | "priority"> &
-    Partial<Pick<TaskWritableFields, "startDate" | "endDate" | "tags">> & {
+    Partial<Pick<TaskWritableFields, "startDate" | "endDate" | "tags" | "memo">> & {
       parentId: string | null;
     }
 ): Promise<{ id: string; tree: TodoTask[] }> {
@@ -67,6 +67,7 @@ export async function createTaskAction(
       ...toPrismaData({
         title: input.title,
         priority: input.priority,
+        memo: input.memo ?? "",
         startDate: input.startDate ?? null,
         endDate: input.endDate ?? null,
         tags: input.tags ?? [],
@@ -166,6 +167,19 @@ export async function updateTaskAction(
   }
 
   await prisma.task.update({ where: { id }, data: toPrismaData(payload) });
+  revalidatePath("/todo");
+  return getFreshTree();
+}
+
+export async function reorderTasksAction(
+  parentId: string | null,
+  orderedIds: string[]
+): Promise<TodoTask[]> {
+  await prisma.$transaction(
+    orderedIds.map((id, index) =>
+      prisma.task.update({ where: { id, parentId }, data: { order: index } })
+    )
+  );
   revalidatePath("/todo");
   return getFreshTree();
 }
