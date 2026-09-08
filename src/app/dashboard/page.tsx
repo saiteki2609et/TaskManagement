@@ -12,7 +12,10 @@ import { listDeliverableTypesAction } from "@/lib/actions/deliverable-types";
 import { listDeliverablesAction } from "@/lib/actions/deliverables";
 import { listFeaturesAction } from "@/lib/actions/features";
 import { listPhasesAction } from "@/lib/actions/phases";
-import { listSwitchableProjectsAction } from "@/lib/actions/projects";
+import {
+  getProjectAction,
+  listSwitchableProjectsAction,
+} from "@/lib/actions/projects";
 import { PAGE_CONTAINER } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
@@ -57,14 +60,22 @@ export default async function DashboardPage({
   let phases: Phase[] = [];
   let deliverableTypes: DeliverableType[] = [];
   let deliverables: Deliverable[] = [];
+  let designDocFolderPath = "";
 
   if (currentProjectId) {
-    [features, phases, deliverableTypes, deliverables] = await Promise.all([
-      listFeaturesAction(currentProjectId),
-      listPhasesAction(currentProjectId),
-      listDeliverableTypesAction(currentProjectId),
-      listDeliverablesAction(currentProjectId),
-    ]);
+    const [featuresResult, phasesResult, deliverableTypesResult, deliverablesResult, project] =
+      await Promise.all([
+        listFeaturesAction(currentProjectId),
+        listPhasesAction(currentProjectId),
+        listDeliverableTypesAction(currentProjectId),
+        listDeliverablesAction(currentProjectId),
+        getProjectAction(currentProjectId),
+      ]);
+    features = featuresResult;
+    phases = phasesResult;
+    deliverableTypes = deliverableTypesResult;
+    deliverables = deliverablesResult;
+    designDocFolderPath = project?.designDocFolderPath ?? "";
   }
 
   return (
@@ -72,6 +83,7 @@ export default async function DashboardPage({
       <DashboardView
         switchableProjects={projects}
         currentProjectId={currentProjectId}
+        designDocFolderPath={designDocFolderPath}
         initialTab={tab}
         features={features}
         phases={phases}

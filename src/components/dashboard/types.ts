@@ -96,6 +96,7 @@ export type QaSource = {
   documentTitle: string;
   sectionLabel: string;
   filePath: string;
+  snippet: string;
 };
 
 export type QaHistoryItem = {

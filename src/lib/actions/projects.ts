@@ -48,6 +48,11 @@ export async function listProjectsAction(): Promise<Project[]> {
   return rows.map(toProject);
 }
 
+export async function getProjectAction(id: string): Promise<Project | null> {
+  const row = await prisma.project.findFirst({ where: { id, deletedAt: null } });
+  return row ? toProject(row) : null;
+}
+
 export async function listSwitchableProjectsAction(): Promise<
   Pick<Project, "id" | "name">[]
 > {

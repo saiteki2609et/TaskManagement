@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { GanttView } from "@/components/dashboard/gantt-view";
 import { ProjectSwitcher } from "@/components/dashboard/project-switcher";
+import { QaView } from "@/components/dashboard/qa-view";
 import type {
   Deliverable,
   DeliverableType,
@@ -37,6 +38,7 @@ type DashboardTab = "matrix" | "gantt" | "qa";
 type DashboardViewProps = {
   switchableProjects: Pick<Project, "id" | "name">[];
   currentProjectId: string | null;
+  designDocFolderPath: string;
   initialTab: DashboardTab;
   features: Feature[];
   phases: Phase[];
@@ -47,6 +49,7 @@ type DashboardViewProps = {
 export function DashboardView({
   switchableProjects,
   currentProjectId,
+  designDocFolderPath,
   initialTab,
   features,
   phases,
@@ -107,9 +110,11 @@ export function DashboardView({
           </TabsContent>
 
           <TabsContent value="qa" className="pt-4">
-            <p className="rounded-lg border border-dashed border-border py-10 text-center text-sm text-muted-foreground">
-              設計書QA機能は準備中です
-            </p>
+            <QaView
+              key={currentProjectId}
+              projectId={currentProjectId}
+              designDocFolderPath={designDocFolderPath}
+            />
           </TabsContent>
         </Tabs>
       ) : (
