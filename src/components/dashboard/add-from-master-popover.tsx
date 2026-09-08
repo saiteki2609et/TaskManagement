@@ -58,6 +58,14 @@ export function AddFromMasterPopover({
     });
   }
 
+  const allSelected =
+    candidates.length > 0 && candidates.every((o) => selected.has(o.id));
+  const someSelected = candidates.some((o) => selected.has(o.id));
+
+  function toggleAll(checked: boolean) {
+    setSelected(checked ? new Set(candidates.map((o) => o.id)) : new Set());
+  }
+
   async function handleAdd() {
     if (selected.size === 0) return;
     setSubmitting(true);
@@ -91,6 +99,16 @@ export function AddFromMasterPopover({
           </p>
         ) : (
           <ul className="max-h-64 space-y-1 overflow-y-auto">
+            <li className="border-b border-border pb-1">
+              <label className="flex items-center gap-2 rounded-md px-1.5 py-1 text-sm hover:bg-muted">
+                <Checkbox
+                  checked={allSelected}
+                  indeterminate={!allSelected && someSelected}
+                  onCheckedChange={(checked) => toggleAll(checked === true)}
+                />
+                全選択
+              </label>
+            </li>
             {candidates.map((option) => (
               <li key={option.id}>
                 <label className="flex items-center gap-2 rounded-md px-1.5 py-1 text-sm hover:bg-muted">

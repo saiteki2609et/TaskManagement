@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { ChevronRight } from "lucide-react";
+import { toast } from "sonner";
 
 import {
   Select,
@@ -11,6 +12,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { countDelayed } from "@/components/dashboard/aggregate-status";
+import { DeliverableDetailDialog } from "@/components/dashboard/deliverable-detail-dialog";
+import type { DeliverableUpdate } from "@/components/dashboard/cell-detail-panel";
 import { GanttBar, GanttRollupBar } from "@/components/dashboard/gantt-bar";
 import {
   buildDateScale,
@@ -18,6 +21,10 @@ import {
   type GanttUnit,
 } from "@/components/dashboard/gantt-date-scale";
 import type { Deliverable, Feature, Phase } from "@/components/dashboard/types";
+import {
+  deleteDeliverableAction,
+  updateDeliverableAction,
+} from "@/lib/actions/deliverables";
 import { cn } from "@/lib/utils";
 
 const ALL_VALUE = "__all__";
@@ -31,16 +38,45 @@ const UNIT_LABEL: Record<GanttUnit, string> = {
 type GanttViewProps = {
   features: Feature[];
   phases: Phase[];
-  deliverables: Deliverable[];
+  initialDeliverables: Deliverable[];
 };
 
-export function GanttView({ features, phases, deliverables }: GanttViewProps) {
+export function GanttView({
+  features,
+  phases,
+  initialDeliverables,
+}: GanttViewProps) {
+  const [deliverables, setDeliverables] = React.useState(initialDeliverables);
   const [unit, setUnit] = React.useState<GanttUnit>("month");
   const [expandedFeatureIds, setExpandedFeatureIds] = React.useState<
     Set<string>
   >(new Set());
   const [filterFeatureId, setFilterFeatureId] = React.useState(ALL_VALUE);
   const [filterPhaseId, setFilterPhaseId] = React.useState(ALL_VALUE);
+  const [selectedDeliverable, setSelectedDeliverable] =
+    React.useState<Deliverable | null>(null);
+
+  async function handleUpdateDeliverable(id: string, data: DeliverableUpdate) {
+    try {
+      const fresh = await updateDeliverableAction(id, data);
+      setDeliverables(fresh);
+      setSelectedDeliverable(fresh.find((d) => d.id === id) ?? null);
+      toast.success("保存しました");
+    } catch {
+      toast.error("保存に失敗しました");
+    }
+  }
+
+  async function handleDeleteDeliverable(id: string) {
+    try {
+      const fresh = await deleteDeliverableAction(id);
+      setDeliverables(fresh);
+      setSelectedDeliverable(null);
+      toast.success("成果物を削除しました");
+    } catch {
+      toast.error("削除に失敗しました");
+    }
+  }
 
   function toggleExpand(featureId: string) {
     setExpandedFeatureIds((prev) => {
@@ -216,7 +252,11 @@ export function GanttView({ features, phases, deliverables }: GanttViewProps) {
                     </tr>
                     {expanded &&
                       group.deliverables.map((deliverable) => (
-                        <tr key={deliverable.id}>
+                        <tr
+                          key={deliverable.id}
+                          className="cursor-pointer hover:bg-muted/40"
+                          onClick={() => setSelectedDeliverable(deliverable)}
+                        >
                           <td className="sticky left-0 z-10 border-b border-border bg-background p-2 pl-8 text-muted-foreground">
                             <span className="truncate">{deliverable.name}</span>
                           </td>
@@ -225,7 +265,11 @@ export function GanttView({ features, phases, deliverables }: GanttViewProps) {
                               className="relative h-10"
                               style={{ width: scale.totalWidthPx }}
                             >
-                              <GanttBar deliverable={deliverable} scale={scale} />
+                              <GanttBar
+                                deliverable={deliverable}
+                                scale={scale}
+                                onClick={() => setSelectedDeliverable(deliverable)}
+                              />
                             </div>
                           </td>
                         </tr>
@@ -237,6 +281,13 @@ export function GanttView({ features, phases, deliverables }: GanttViewProps) {
           </table>
         </div>
       )}
+
+      <DeliverableDetailDialog
+        deliverable={selectedDeliverable}
+        onOpenChange={(open) => !open && setSelectedDeliverable(null)}
+        onUpdate={handleUpdateDeliverable}
+        onDelete={handleDeleteDeliverable}
+      />
     </div>
   );
 }

@@ -104,9 +104,10 @@ export function DashboardView({
 
           <TabsContent value="gantt" className="pt-4">
             <GanttView
+              key={currentProjectId}
               features={features}
               phases={phases}
-              deliverables={deliverables}
+              initialDeliverables={deliverables}
             />
           </TabsContent>
 

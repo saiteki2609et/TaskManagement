@@ -42,21 +42,16 @@ function startOfMonth(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), 1);
 }
 
-function startOfQuarter(date: Date): Date {
-  const quarter = Math.floor(date.getMonth() / 3);
-  return new Date(date.getFullYear(), quarter * 3, 1);
-}
-
+// 週表示は1日ごと、月表示は1週間ごと、四半期表示は1か月ごとに目盛りを刻む。
 function nextColumnStart(date: Date, unit: GanttUnit): Date {
-  if (unit === "week") return addDays(date, 7);
-  if (unit === "month") return new Date(date.getFullYear(), date.getMonth() + 1, 1);
-  return new Date(date.getFullYear(), date.getMonth() + 3, 1);
+  if (unit === "week") return addDays(date, 1);
+  if (unit === "month") return addDays(date, 7);
+  return new Date(date.getFullYear(), date.getMonth() + 1, 1);
 }
 
 function formatColumnLabel(date: Date, unit: GanttUnit): string {
-  if (unit === "week") return `${date.getMonth() + 1}/${date.getDate()}`;
-  if (unit === "month") return `${date.getFullYear()}/${date.getMonth() + 1}`;
-  return `${date.getFullYear()} Q${Math.floor(date.getMonth() / 3) + 1}`;
+  if (unit === "quarter") return `${date.getFullYear()}/${date.getMonth() + 1}`;
+  return `${date.getMonth() + 1}/${date.getDate()}`;
 }
 
 export function dateToOffsetPx(
@@ -75,10 +70,10 @@ export function buildDateScale(
   const pxPerDay = PX_PER_DAY[unit];
   const start =
     unit === "week"
-      ? startOfWeek(rangeStart)
+      ? startOfDay(rangeStart)
       : unit === "month"
-        ? startOfMonth(rangeStart)
-        : startOfQuarter(rangeStart);
+        ? startOfWeek(rangeStart)
+        : startOfMonth(rangeStart);
   const totalDays = Math.max(1, diffDays(rangeEnd, start));
   const totalWidthPx = totalDays * pxPerDay;
 

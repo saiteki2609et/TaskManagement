@@ -30,9 +30,9 @@ type NavItem = {
 
 const mainNavItems: NavItem[] = [
   { label: "ダッシュボード", href: "/dashboard", icon: LayoutDashboard, active: true },
-  { label: "Todo", href: "/todo", icon: CheckSquare, active: true },
-  { label: "プロジェクト", href: "/projects", icon: FolderKanban, active: true },
+  { label: "プロジェクト管理", href: "/projects", icon: FolderKanban, active: true },
   { label: "カレンダー", href: "/calendar", icon: Calendar },
+  { label: "Todo", href: "/todo", icon: CheckSquare, active: true },
 ];
 
 const utilityItems: { label: string; icon: React.ComponentType<{ className?: string }> }[] = [

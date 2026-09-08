@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { chunkText } from "@/lib/design-docs/chunk";
 import { extractSections, SUPPORTED_EXTENSIONS } from "@/lib/design-docs/extract-text";
+import { publishDesignDocProgress } from "@/lib/design-docs/progress-bus";
 import { embed } from "@/lib/llm/ollama-client";
 import { prisma } from "@/lib/prisma";
 import { encodeEmbedding } from "@/lib/qa/embedding-codec";
@@ -16,13 +17,30 @@ export type RescanResult = {
   failures: { filePath: string; reason: string }[];
 };
 
-async function walkDir(dir: string): Promise<string[]> {
-  const entries = await fs.readdir(dir, { withFileTypes: true });
+// サブディレクトリの読み取りに個別に失敗しても(権限エラー等)、その配下だけを
+// スキップして他のサブディレクトリの走査は継続する。1箇所の失敗で
+// フォルダ全体の取り込みが失敗扱いになる(result.failedが0件のまま処理が
+// 中断される)のを避けるための対応。
+async function walkDir(
+  dir: string,
+  failures: { filePath: string; reason: string }[]
+): Promise<string[]> {
+  let entries;
+  try {
+    entries = await fs.readdir(dir, { withFileTypes: true });
+  } catch {
+    failures.push({
+      filePath: dir,
+      reason: "フォルダを読み込めませんでした。パスやアクセス権限を確認してください",
+    });
+    return [];
+  }
+
   const files: string[] = [];
   for (const entry of entries) {
     const fullPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      files.push(...(await walkDir(fullPath)));
+      files.push(...(await walkDir(fullPath, failures)));
     } else if (entry.isFile()) {
       files.push(fullPath);
     }
@@ -46,16 +64,12 @@ export async function scanAndIndex(
     failures: [],
   };
 
-  let allFiles: string[];
-  try {
-    allFiles = await walkDir(folderPath);
-  } catch {
-    result.failed++;
-    result.failures.push({
-      filePath: folderPath,
-      reason: "フォルダを読み込めませんでした。パスを確認してください",
-    });
-    return result;
+  const dirFailures: { filePath: string; reason: string }[] = [];
+  const allFiles = await walkDir(folderPath, dirFailures);
+
+  if (dirFailures.length > 0) {
+    result.failed += dirFailures.length;
+    result.failures.push(...dirFailures);
   }
 
   const targetFiles = allFiles.filter((f) =>
@@ -75,6 +89,21 @@ export async function scanAndIndex(
         result.skipped++;
         continue;
       }
+
+      // 抽出・埋め込み処理の前に「処理中」を記録し、クライアントがポーリングで
+      // ファイル単位の進捗(処理中/取込済み)を確認できるようにする。
+      await prisma.designDocument.upsert({
+        where: { projectId_filePath: { projectId, filePath } },
+        update: { indexStatus: "processing" },
+        create: {
+          projectId,
+          title: path.basename(filePath),
+          filePath,
+          fileHash: "",
+          indexStatus: "processing",
+        },
+      });
+      publishDesignDocProgress(projectId);
 
       const sections = await extractSections(filePath, buffer);
       const chunks = chunkText(sections);
@@ -116,6 +145,7 @@ export async function scanAndIndex(
 
       if (existing) result.updated++;
       else result.added++;
+      publishDesignDocProgress(projectId);
     } catch (error) {
       result.failed++;
       result.failures.push({
@@ -135,6 +165,7 @@ export async function scanAndIndex(
           },
         })
         .catch(() => {});
+      publishDesignDocProgress(projectId);
     }
   }
 

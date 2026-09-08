@@ -26,6 +26,10 @@ export async function listQaHistoryAction(projectId: string): Promise<QaHistoryI
   return rows.map(toQaHistoryItem);
 }
 
+export async function clearQaHistoryAction(projectId: string): Promise<void> {
+  await prisma.qaHistory.deleteMany({ where: { projectId } });
+}
+
 export async function askQuestionAction(
   projectId: string,
   question: string

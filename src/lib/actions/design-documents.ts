@@ -42,6 +42,27 @@ export async function listDesignDocumentsAction(projectId: string): Promise<{
   return { documents, pendingCount, lastScannedAt };
 }
 
+export async function getDesignDocumentChunksAction(documentId: string): Promise<{
+  title: string;
+  filePath: string;
+  indexStatus: DesignDocument["indexStatus"];
+  chunks: { sectionLabel: string; content: string }[];
+}> {
+  const doc = await prisma.designDocument.findUniqueOrThrow({
+    where: { id: documentId },
+    include: { chunks: { orderBy: { chunkIndex: "asc" } } },
+  });
+  return {
+    title: doc.title,
+    filePath: doc.filePath,
+    indexStatus: doc.indexStatus as DesignDocument["indexStatus"],
+    chunks: doc.chunks.map((c) => ({
+      sectionLabel: c.sectionLabel,
+      content: c.content,
+    })),
+  };
+}
+
 export async function rescanDesignDocumentsAction(
   projectId: string
 ): Promise<RescanResult> {

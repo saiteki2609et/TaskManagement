@@ -77,6 +77,7 @@ export type Deliverable = {
   typeId: string | null;
   name: string;
   assignee: string;
+  link: string;
   status: DeliverableStatus;
   plannedStartDate: string | null;
   plannedEndDate: string | null;
@@ -92,7 +93,7 @@ export type DesignDocument = {
   projectId: string;
   title: string;
   filePath: string;
-  indexStatus: "pending" | "indexed" | "failed";
+  indexStatus: "pending" | "processing" | "indexed" | "failed";
   indexedAt: string | null;
   updatedAt: string;
 };

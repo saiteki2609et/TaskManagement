@@ -127,6 +127,7 @@ model Deliverable {
 
   name             String
   assignee         String    @default("")
+  link             String    @default("")
   status           String    @default("not_started") // not_started/in_progress/on_hold/in_review/done
   plannedStartDate DateTime?
   plannedEndDate   DateTime?

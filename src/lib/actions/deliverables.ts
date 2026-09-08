@@ -23,6 +23,7 @@ function toDeliverable(row: DeliverableRow): Deliverable {
     typeId: row.typeId,
     name: row.name,
     assignee: row.assignee,
+    link: row.link,
     status: row.status as DeliverableStatus,
     plannedStartDate: toDateString(row.plannedStartDate),
     plannedEndDate: toDateString(row.plannedEndDate),
@@ -78,6 +79,7 @@ export async function updateDeliverableAction(
   data: Partial<{
     name: string;
     assignee: string;
+    link: string;
     status: DeliverableStatus;
     plannedStartDate: string | null;
     plannedEndDate: string | null;
@@ -90,12 +92,14 @@ export async function updateDeliverableAction(
   const payload: Partial<{
     name: string;
     assignee: string;
+    link: string;
     status: DeliverableStatus;
     memo: string;
     progress: number;
   }> = {
     name: data.name,
     assignee: data.assignee,
+    link: data.link,
     status: data.status,
     memo: data.memo,
     progress: data.progress,
@@ -121,6 +125,7 @@ export async function updateDeliverableAction(
     data: {
       ...(payload.name !== undefined && { name: payload.name }),
       ...(payload.assignee !== undefined && { assignee: payload.assignee }),
+      ...(payload.link !== undefined && { link: payload.link }),
       ...(payload.status !== undefined && { status: payload.status }),
       ...(payload.memo !== undefined && { memo: payload.memo }),
       ...(payload.progress !== undefined && { progress: payload.progress }),

@@ -336,6 +336,7 @@ export function ProgressMatrixView({
 
       {activeCellData?.feature && activeCellData.phase && (
         <CellDetailPanel
+          key={`${activeCellData.feature.id}-${activeCellData.phase.id}`}
           open
           onOpenChange={(open) => !open && setActiveCell(null)}
           featureName={activeCellData.feature.name}

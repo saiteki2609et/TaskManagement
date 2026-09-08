@@ -7,23 +7,16 @@ import {
 } from "@/components/dashboard/gantt-date-scale";
 import { DELIVERABLE_STATUS_META } from "@/components/dashboard/status";
 import type { Deliverable } from "@/components/dashboard/types";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-
-function formatDate(value: string | null): string {
-  return value ?? "未設定";
-}
 
 export function GanttBar({
   deliverable,
   scale,
+  onClick,
 }: {
   deliverable: Deliverable;
   scale: GanttScale;
+  onClick: () => void;
 }) {
   const plannedStart = deliverable.plannedStartDate
     ? new Date(deliverable.plannedStartDate)
@@ -75,37 +68,27 @@ export function GanttBar({
       )
     : 0;
 
+  const title = `${deliverable.name}${delayed ? `(遅延${delayDays}日)` : ""}`;
+
   return (
-    <Popover>
-      <PopoverTrigger
-        className={cn(
-          "absolute top-1/2 h-5 -translate-y-1/2 rounded-full bg-muted-foreground/20",
-          delayed && "ring-2 ring-rose-500"
-        )}
-        style={{ left: plannedLeft, width: plannedWidth }}
-      >
-        {actualLeft !== null && actualWidth > 0 && (
-          <span
-            className={cn("absolute inset-y-0 rounded-full", statusMeta.dot)}
-            style={{ left: actualLeft - plannedLeft, width: actualWidth }}
-          />
-        )}
-      </PopoverTrigger>
-      <PopoverContent className="w-64 space-y-1">
-        <p className="text-sm font-medium">{deliverable.name}</p>
-        <p className="text-xs text-muted-foreground">
-          予定: {formatDate(deliverable.plannedStartDate)} 〜{" "}
-          {formatDate(deliverable.plannedEndDate)}
-        </p>
-        <p className="text-xs text-muted-foreground">
-          実績: {formatDate(deliverable.actualStartDate)} 〜{" "}
-          {formatDate(deliverable.actualEndDate)}
-        </p>
-        {delayed && (
-          <p className="text-xs font-medium text-rose-600">遅延: {delayDays}日</p>
-        )}
-      </PopoverContent>
-    </Popover>
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+      className={cn(
+        "absolute top-1/2 h-5 -translate-y-1/2 cursor-pointer rounded-full bg-muted-foreground/20 transition-opacity hover:opacity-80",
+        delayed && "ring-2 ring-rose-500"
+      )}
+      style={{ left: plannedLeft, width: plannedWidth }}
+    >
+      {actualLeft !== null && actualWidth > 0 && (
+        <span
+          className={cn("absolute inset-y-0 rounded-full", statusMeta.dot)}
+          style={{ left: actualLeft - plannedLeft, width: actualWidth }}
+        />
+      )}
+    </button>
   );
 }
 
