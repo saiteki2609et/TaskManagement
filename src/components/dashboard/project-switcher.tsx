@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
+import { buttonVariants } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -29,10 +30,7 @@ export function ProjectSwitcher({
     return (
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <span>プロジェクトがありません</span>
-        <Link
-          href="/projects"
-          className="text-primary underline-offset-4 hover:underline"
-        >
+        <Link href="/projects" className={buttonVariants({ size: "sm" })}>
           プロジェクトを作成
         </Link>
       </div>

@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+import { FolderOpen, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -15,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { ActionResult } from "@/lib/actions/action-result";
 import type { Project } from "@/components/dashboard/types";
+import { pickFolderAction } from "@/lib/actions/pick-folder";
 
 type ProjectFormDialogProps = {
   open: boolean;
@@ -36,6 +39,7 @@ export function ProjectFormDialog({
   const [folderPath, setFolderPath] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
+  const [picking, setPicking] = React.useState(false);
   const [prevOpen, setPrevOpen] = React.useState(open);
 
   if (open !== prevOpen) {
@@ -48,6 +52,18 @@ export function ProjectFormDialog({
   }
 
   const isValid = name.trim().length > 0 && folderPath.trim().length > 0;
+
+  async function handlePickFolder() {
+    setPicking(true);
+    try {
+      const selected = await pickFolderAction(folderPath);
+      if (selected) setFolderPath(selected);
+    } catch {
+      toast.error("フォルダ選択ダイアログの起動に失敗しました");
+    } finally {
+      setPicking(false);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -93,12 +109,28 @@ export function ProjectFormDialog({
 
             <div className="space-y-1.5">
               <Label htmlFor="project-folder-path">設計書フォルダパス</Label>
-              <Input
-                id="project-folder-path"
-                value={folderPath}
-                onChange={(e) => setFolderPath(e.target.value)}
-                placeholder="C:\docs\project-a"
-              />
+              <div className="flex gap-2">
+                <Input
+                  id="project-folder-path"
+                  value={folderPath}
+                  onChange={(e) => setFolderPath(e.target.value)}
+                  placeholder="C:\docs\project-a"
+                  className="flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handlePickFolder}
+                  disabled={picking}
+                >
+                  {picking ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <FolderOpen className="h-4 w-4" />
+                  )}
+                  参照...
+                </Button>
+              </div>
             </div>
 
             {error && <p className="text-sm text-destructive">{error}</p>}
