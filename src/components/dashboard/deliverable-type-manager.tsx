@@ -35,10 +35,13 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { AddFromMasterPopover } from "@/components/dashboard/add-from-master-popover";
 import type { DeliverableType, Phase } from "@/components/dashboard/types";
 import {
+  addGlobalDeliverableTypesToProjectAction,
   createDeliverableTypeAction,
   deleteDeliverableTypeAction,
+  listGlobalDeliverableTypesAction,
   updateDeliverableTypeAction,
 } from "@/lib/actions/deliverable-types";
 
@@ -103,7 +106,24 @@ export function DeliverableTypeManager({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
+          <AddFromMasterPopover
+            label="マスタから追加"
+            loadOptions={listGlobalDeliverableTypesAction}
+            existingNames={types.map((t) => t.name)}
+            onAdd={async (ids) => {
+              try {
+                const fresh = await addGlobalDeliverableTypesToProjectAction(
+                  projectId,
+                  ids
+                );
+                onTypesChange(fresh);
+                toast.success("成果物種類を追加しました");
+              } catch {
+                toast.error("追加に失敗しました");
+              }
+            }}
+          />
           <Button
             type="button"
             size="sm"

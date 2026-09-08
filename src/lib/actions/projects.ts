@@ -79,6 +79,26 @@ export async function createProjectAction(input: {
       const project = await tx.project.create({
         data: { name, designDocFolderPath },
       });
+
+      const globalPhases = await tx.globalPhase.findMany({
+        orderBy: { order: "asc" },
+      });
+      if (globalPhases.length > 0) {
+        await tx.phase.createMany({
+          data: globalPhases.map((phase) => ({
+            projectId: project.id,
+            name: phase.name,
+            order: phase.order,
+          })),
+        });
+      }
+      const createdPhases = await tx.phase.findMany({
+        where: { projectId: project.id },
+      });
+      const phaseIdByName = new Map(
+        createdPhases.map((phase) => [phase.name, phase.id])
+      );
+
       const globalTypes = await tx.globalDeliverableType.findMany({
         orderBy: { order: "asc" },
       });
@@ -87,6 +107,7 @@ export async function createProjectAction(input: {
           data: globalTypes.map((type) => ({
             projectId: project.id,
             name: type.name,
+            defaultPhaseId: phaseIdByName.get(type.defaultPhaseName) ?? null,
             order: type.order,
           })),
         });

@@ -6,6 +6,7 @@ import {
   listTrashedProjectsAction,
 } from "@/lib/actions/projects";
 import { listGlobalDeliverableTypesAction } from "@/lib/actions/deliverable-types";
+import { listGlobalPhasesAction } from "@/lib/actions/phases";
 import { PAGE_CONTAINER } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
@@ -17,10 +18,11 @@ export const metadata: Metadata = {
 };
 
 export default async function ProjectsPage() {
-  const [projects, trashed, globalTypes] = await Promise.all([
+  const [projects, trashed, globalTypes, globalPhases] = await Promise.all([
     listProjectsAction(),
     listTrashedProjectsAction(),
     listGlobalDeliverableTypesAction(),
+    listGlobalPhasesAction(),
   ]);
 
   return (
@@ -35,6 +37,7 @@ export default async function ProjectsPage() {
         initialProjects={projects}
         initialTrashed={trashed}
         initialGlobalTypes={globalTypes}
+        initialGlobalPhases={globalPhases}
       />
     </div>
   );

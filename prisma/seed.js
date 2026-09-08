@@ -58,7 +58,51 @@ async function main() {
   });
 }
 
+const DEFAULT_GLOBAL_PHASES = [
+  "要件定義",
+  "基本設計",
+  "詳細設計",
+  "実装",
+  "単体テスト",
+  "結合テスト",
+  "総合テスト",
+  "リリース",
+];
+
+const DEFAULT_GLOBAL_DELIVERABLE_TYPES = [
+  { name: "要件定義書", defaultPhaseName: "要件定義" },
+  { name: "基本設計書", defaultPhaseName: "基本設計" },
+  { name: "詳細設計書", defaultPhaseName: "詳細設計" },
+  { name: "単体テスト仕様書", defaultPhaseName: "単体テスト" },
+  { name: "結合テスト仕様書", defaultPhaseName: "結合テスト" },
+  { name: "総合テスト仕様書", defaultPhaseName: "総合テスト" },
+  { name: "テスト報告書", defaultPhaseName: "総合テスト" },
+  { name: "操作マニュアル", defaultPhaseName: "リリース" },
+];
+
+async function seedGlobalPhases() {
+  const existing = await prisma.globalPhase.count();
+  if (existing > 0) return;
+  await prisma.globalPhase.createMany({
+    data: DEFAULT_GLOBAL_PHASES.map((name, order) => ({ name, order })),
+  });
+}
+
+async function seedGlobalDeliverableTypes() {
+  const existing = await prisma.globalDeliverableType.count();
+  if (existing > 0) return;
+  await prisma.globalDeliverableType.createMany({
+    data: DEFAULT_GLOBAL_DELIVERABLE_TYPES.map((type, order) => ({
+      name: type.name,
+      defaultPhaseName: type.defaultPhaseName,
+      order,
+    })),
+  });
+}
+
 main()
+  .then(() => seedGlobalPhases())
+  .then(() => seedGlobalDeliverableTypes())
   .then(async () => {
     await prisma.$disconnect();
   })

@@ -25,6 +25,7 @@ type SimpleMasterListProps<T extends MasterItem> = {
   onUpdate: (id: string, name: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   deleteWarning: string;
+  headerAction?: React.ReactNode;
 };
 
 export function SimpleMasterList<T extends MasterItem>({
@@ -34,6 +35,7 @@ export function SimpleMasterList<T extends MasterItem>({
   onUpdate,
   onDelete,
   deleteWarning,
+  headerAction,
 }: SimpleMasterListProps<T>) {
   const [newName, setNewName] = React.useState("");
   const [creating, setCreating] = React.useState(false);
@@ -53,7 +55,10 @@ export function SimpleMasterList<T extends MasterItem>({
 
   return (
     <div className="space-y-2">
-      <h4 className="text-sm font-semibold">{title}</h4>
+      <div className="flex items-center justify-between gap-2">
+        <h4 className="text-sm font-semibold">{title}</h4>
+        {headerAction}
+      </div>
       <form onSubmit={handleCreate} className="flex gap-2">
         <Input
           value={newName}

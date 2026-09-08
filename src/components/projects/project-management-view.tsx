@@ -31,10 +31,12 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { GlobalDeliverableTypeSection } from "@/components/projects/global-deliverable-type-section";
+import { GlobalPhaseSection } from "@/components/projects/global-phase-section";
 import { ProjectFormDialog } from "@/components/projects/project-form-dialog";
 import { ProjectTrashTab } from "@/components/projects/project-trash-tab";
 import type {
   GlobalDeliverableType,
+  GlobalPhase,
   Project,
   TrashedProject,
 } from "@/components/dashboard/types";
@@ -62,12 +64,14 @@ type ProjectManagementViewProps = {
   initialProjects: Project[];
   initialTrashed: TrashedProject[];
   initialGlobalTypes: GlobalDeliverableType[];
+  initialGlobalPhases: GlobalPhase[];
 };
 
 export function ProjectManagementView({
   initialProjects,
   initialTrashed,
   initialGlobalTypes,
+  initialGlobalPhases,
 }: ProjectManagementViewProps) {
   const [tab, setTab] = React.useState<"list" | "trash">("list");
   const [projects, setProjects] = React.useState(initialProjects);
@@ -233,7 +237,10 @@ export function ProjectManagementView({
             </Table>
           )}
 
-          <GlobalDeliverableTypeSection initialTypes={initialGlobalTypes} />
+          <div className="grid gap-6 sm:grid-cols-2">
+            <GlobalPhaseSection initialPhases={initialGlobalPhases} />
+            <GlobalDeliverableTypeSection initialTypes={initialGlobalTypes} />
+          </div>
         </TabsContent>
 
         <TabsContent value="trash" className="pt-4">

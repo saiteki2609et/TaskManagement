@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { AddFromMasterPopover } from "@/components/dashboard/add-from-master-popover";
 import { SimpleMasterList } from "@/components/dashboard/simple-master-list";
 import type { Feature, Phase } from "@/components/dashboard/types";
 import {
@@ -17,8 +18,10 @@ import {
   updateFeatureAction,
 } from "@/lib/actions/features";
 import {
+  addGlobalPhasesToProjectAction,
   createPhaseAction,
   deletePhaseAction,
+  listGlobalPhasesAction,
   updatePhaseAction,
 } from "@/lib/actions/phases";
 
@@ -56,6 +59,25 @@ export function PhaseFeatureManager({
             title="工程"
             items={phases}
             deleteWarning="この工程に紐づく成果物もすべて削除されます。"
+            headerAction={
+              <AddFromMasterPopover
+                label="マスタから追加"
+                loadOptions={listGlobalPhasesAction}
+                existingNames={phases.map((p) => p.name)}
+                onAdd={async (ids) => {
+                  try {
+                    const fresh = await addGlobalPhasesToProjectAction(
+                      projectId,
+                      ids
+                    );
+                    onPhasesChange(fresh);
+                    toast.success("工程を追加しました");
+                  } catch {
+                    toast.error("追加に失敗しました");
+                  }
+                }}
+              />
+            }
             onCreate={async (name) => {
               try {
                 onPhasesChange(await createPhaseAction(projectId, name));

@@ -81,6 +81,14 @@ model Feature {
 }
 
 // 全プロジェクト共通のひな形マスタ(projectIdを持たない)
+model GlobalPhase {
+  id        String   @id @default(cuid())
+  name      String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model GlobalDeliverableType {
   id               String   @id @default(cuid())
   name             String

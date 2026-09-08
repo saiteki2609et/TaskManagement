@@ -40,6 +40,12 @@ export type Phase = {
   order: number;
 };
 
+export type GlobalPhase = {
+  id: string;
+  name: string;
+  order: number;
+};
+
 export type Feature = {
   id: string;
   projectId: string;

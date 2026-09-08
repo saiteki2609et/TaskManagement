@@ -93,6 +93,7 @@ export function DashboardView({
 
           <TabsContent value="matrix" className="pt-4">
             <ProgressMatrixView
+              key={currentProjectId}
               projectId={currentProjectId}
               initialFeatures={features}
               initialPhases={phases}

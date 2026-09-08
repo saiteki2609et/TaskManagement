@@ -148,6 +148,41 @@ export async function updateDeliverableTypeAction(
   return listDeliverableTypesAction(updated.projectId);
 }
 
+// 共通成果物種類マスタから選択した種類をプロジェクトに追加する。
+// 既に同名の種類がプロジェクトに存在するものはスキップする。
+// 想定工程は名称が一致するプロジェクト内の工程があれば紐付け、なければ未設定とする。
+export async function addGlobalDeliverableTypesToProjectAction(
+  projectId: string,
+  globalTypeIds: string[]
+): Promise<DeliverableType[]> {
+  const [globalTypes, existingTypes, projectPhases] = await Promise.all([
+    prisma.globalDeliverableType.findMany({
+      where: { id: { in: globalTypeIds } },
+      orderBy: { order: "asc" },
+    }),
+    prisma.deliverableType.findMany({ where: { projectId } }),
+    prisma.phase.findMany({ where: { projectId } }),
+  ]);
+  const existingNames = new Set(existingTypes.map((t) => t.name));
+  const phaseIdByName = new Map(projectPhases.map((p) => [p.name, p.id]));
+  const toCreate = globalTypes.filter((gt) => !existingNames.has(gt.name));
+
+  if (toCreate.length > 0) {
+    let order = existingTypes.length;
+    await prisma.deliverableType.createMany({
+      data: toCreate.map((gt) => ({
+        projectId,
+        name: gt.name,
+        defaultPhaseId: phaseIdByName.get(gt.defaultPhaseName) ?? null,
+        order: order++,
+      })),
+    });
+  }
+
+  revalidatePath("/dashboard");
+  return listDeliverableTypesAction(projectId);
+}
+
 export async function deleteDeliverableTypeAction(
   id: string
 ): Promise<ActionResult<DeliverableType[]>> {
